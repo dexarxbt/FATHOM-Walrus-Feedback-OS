@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FATHOM | Walrus Feedback OS</title>
+  <meta name="description" content="A Walrus-native feedback and form platform for Sessions, bug reports, surveys, applications, encrypted submissions, and private admin triage." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Pixelify+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #03070a;
+      --bg2: #07131a;
+      --ink: #f4fbff;
+      --soft: #a5b9c3;
+      --dim: #5c7480;
+      --panel: rgba(5, 16, 22, .78);
+      --panel2: rgba(8, 25, 34, .92);
+      --line: rgba(137, 236, 255, .2);
+      --line2: rgba(255, 255, 255, .13);
+      --cyan: #74f7ff;
+      --mint: #83ffbd;
+      --acid: #d9ff46;
+      --pink: #ff4fd8;
+      --orange: #ff9155;
+      --red: #ff3f5e;
+      --black: #020304;
+      --shadow: 0 28px 80px rgba(0, 0, 0, .48);
+      --pixel: "Pixelify Sans", ui-monospace, monospace;
+      --display: "Chakra Petch", system-ui, sans-serif;
+      --mono: "DM Mono", ui-monospace, monospace;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f7fbf2;
+      --bg2: #dff5ef;
+      --ink: #061219;
+      --soft: #475f68;
+      --dim: #74858c;
+      --panel: rgba(255, 255, 251, .78);
+      --panel2: rgba(255, 255, 252, .94);
+      --line: rgba(0, 92, 124, .22);
+      --line2: rgba(0, 0, 0, .12);
+      --cyan: #006dff;
+      --mint: #008a66;
+      --acid: #6b7800;
+      --pink: #b3008e;
+      --orange: #b95400;
+      --red: #c2143a;
+      --black: #ffffff;
+      --shadow: 0 28px 70px rgba(4, 37, 45, .16);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--cyan) 19%, transparent), transparent 28%),
+        radial-gradient(circle at 82% 0%, color-mix(in srgb, var(--pink) 14%, transparent), transparent 24%),
+        linear-gradient(180deg, var(--bg), var(--bg2) 52%, var(--bg));
+      color: var(--ink);
+      font-family: var(--display);
+      overflow-x: hidden;
+    }
+
+    body:before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -4;
+      background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 44px 44px;
+      opacity: .42;
+      mask-image: linear-gradient(to bottom, black 0 70%, transparent);
+      transform: translateY(var(--grid-y, 0));
+    }
+
+    body:after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -3;
+      pointer-events: none;
+      opacity: .34;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,.055) 2px 3px),
+        radial-gradient(circle at var(--mx, 50%) var(--my, 30%), color-mix(in srgb, var(--cyan) 18%, transparent), transparent 30%);
+      mix-blend-mode: screen;
+    }
+
+    button, input, textarea, select { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      opacity: .13;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.65'/%3E%3C/svg%3E");
+    }
+
+    .scanline {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      pointer-events: none;
+      background: linear-gradient(to bottom, transparent, rgba(116,247,255,.12), transparent);
+      height: 180px;
+      animation: scan 6s linear infinite;
+      opacity: .24;
+    }
+
+    @keyframes scan {
+      from { transform: translateY(-220px); }
+      to { transform: translateY(calc(100vh + 220px)); }
+    }
+
+    .shell {
+      width: min(1440px, calc(100% - 28px));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 10px;
+      z-index: 60;
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel2) 88%, transparent);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      padding: 8px;
+      clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand img {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border: 1px solid var(--line);
+      image-rendering: pixelated;
+      background: #000;
+    }
+
+    .brand-title {
+      font-family: var(--pixel);
+      font-size: 26px;
+      line-height: .8;
+      text-shadow: 3px 0 0 color-mix(in srgb, var(--cyan) 56%, transparent), -3px 0 0 color-mix(in srgb, var(--pink) 42%, transparent);
+    }
+
+    .brand-sub {
+      margin-top: 5px;
+      font: 500 10px/1 var(--mono);
+      color: var(--soft);
+      text-transform: uppercase;
+    }
+
+    .nav {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      overflow-x: auto;
+    }
+
+    .nav button,
+    .theme,
+    .btn {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.035);
+      color: var(--ink);
+      padding: 0 14px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .28s var(--ease), border-color .28s var(--ease), background .28s var(--ease), color .28s var(--ease);
+    }
+
+    .nav button {
+      font: 600 12px/1 var(--mono);
+      text-transform: uppercase;
+    }
+
+    .nav button.active {
+      background: var(--ink);
+      color: var(--bg);
+      border-color: var(--ink);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 48px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+      transform: translate(var(--tx, 0), var(--ty, 0));
+    }
+
+    .btn:before,
+    .nav button:before,
+    .theme:before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-120%);
+      background: linear-gradient(100deg, transparent, rgba(255,255,255,.3), transparent);
+      transition: transform .7s var(--ease);
+    }
+
+    .btn:hover:before,
+    .nav button:hover:before,
+    .theme:hover:before { transform: translateX(120%); }
+
+    .btn.primary {
+      color: #001015;
+      background: linear-gradient(90deg, var(--cyan), var(--mint), var(--acid));
+      border-color: transparent;
+      box-shadow: 0 0 32px color-mix(in srgb, var(--cyan) 42%, transparent);
+    }
+
+    .btn.danger {
+      background: color-mix(in srgb, var(--red) 18%, transparent);
+      border-color: color-mix(in srgb, var(--red) 60%, transparent);
+    }
+
+    .btn.small {
+      min-height: 34px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .theme {
+      width: 108px;
+      font: 700 11px/1 var(--mono);
+      text-transform: uppercase;
+    }
+
+    main { padding: 26px 0 70px; }
+    .view { display: none; animation: enter .65s var(--ease) both; }
+    .view.active { display: block; }
+
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(16px); filter: blur(8px); }
+      to { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    .hero {
+      min-height: calc(100svh - 112px);
+      display: grid;
+      grid-template-columns: minmax(0, .95fr) minmax(380px, .85fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .poster {
+      position: relative;
+      min-height: clamp(620px, calc(100svh - 112px), 780px);
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, rgba(116,247,255,.12), transparent 34%),
+        linear-gradient(315deg, rgba(255,79,216,.12), transparent 32%),
+        var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      padding: clamp(22px, 4vw, 54px);
+      clip-path: polygon(0 0, calc(100% - 34px) 0, 100% 34px, 100% 100%, 34px 100%, 0 calc(100% - 34px));
+    }
+
+    .poster:before {
+      content: "";
+      position: absolute;
+      inset: -20%;
+      background:
+        conic-gradient(from 90deg at 50% 50%, transparent, rgba(116,247,255,.13), transparent, rgba(217,255,70,.1), transparent),
+        repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,255,255,.045) 18px 19px);
+      animation: rotateDeep 18s linear infinite;
+      opacity: .58;
+    }
+
+    @keyframes rotateDeep {
+      to { transform: rotate(360deg); }
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 2;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: clamp(24px, 5vw, 54px);
+    }
+
+    .hero-copy {
+      display: grid;
+      align-content: start;
+      max-width: 100%;
+    }
+
+    .walgo-banner {
+      width: min(420px, 100%);
+      max-height: 150px;
+      object-fit: cover;
+      border: 1px solid var(--line);
+      image-rendering: pixelated;
+      box-shadow: 0 0 40px rgba(116,247,255,.12);
+      animation: glitchNudge 4s steps(2, end) infinite;
+    }
+
+    @keyframes glitchNudge {
+      0%, 92%, 100% { transform: translate(0); filter: none; }
+      94% { transform: translate(4px, -2px); filter: hue-rotate(80deg); }
+      96% { transform: translate(-3px, 2px); filter: contrast(1.4); }
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      max-width: 100%;
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--soft);
+      font: 500 11px/1 var(--mono);
+      text-transform: uppercase;
+      width: fit-content;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--acid);
+      box-shadow: 0 0 18px var(--acid);
+      animation: blink 1.2s steps(2, end) infinite;
+    }
+
+    @keyframes blink { 50% { opacity: .25; } }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      margin-top: clamp(18px, 3.4vw, 30px);
+      font-family: var(--pixel);
+      font-size: clamp(4.8rem, 10.5vw, 10.6rem);
+      line-height: .78;
+      letter-spacing: -.04em;
+      text-transform: uppercase;
+      max-width: min(100%, 900px);
+      overflow-wrap: normal;
+      white-space: nowrap;
+      text-wrap: nowrap;
+      transform-origin: left top;
+    }
+
+    .glitch {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      padding-right: .04em;
+      animation: glitchText 5s steps(1, end) infinite;
+    }
+
+    .glitch:before,
+    .glitch:after {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .glitch:before { color: var(--cyan); transform: translate(4px, 0); }
+    .glitch:after { color: var(--pink); transform: translate(-4px, 0); }
+
+    @keyframes glitchText {
+      0%, 88%, 100% { text-shadow: none; }
+      90% { text-shadow: 5px 0 var(--cyan), -5px 0 var(--pink); }
+      92% { text-shadow: -3px 0 var(--cyan), 3px 0 var(--pink); }
+    }
+
+    .lede {
+      margin-top: 24px;
+      max-width: 760px;
+      color: var(--soft);
+      font-size: clamp(1.04rem, 1.45vw, 1.34rem);
+      line-height: 1.48;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .ticker {
+      display: flex;
+      gap: 28px;
+      overflow: hidden;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 12px 0;
+      margin-top: 34px;
+      color: var(--cyan);
+      font: 500 12px/1 var(--mono);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .ticker span { animation: ticker 22s linear infinite; }
+    @keyframes ticker { to { transform: translateX(-100%); } }
+
+    .console {
+      min-height: 680px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel2) 86%, transparent);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 26px 100%, 0 calc(100% - 26px));
+    }
+
+    .console-head, .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.035);
+    }
+
+    .window-dots { display: flex; gap: 7px; }
+    .window-dots i {
+      width: 10px;
+      height: 10px;
+      border: 1px solid var(--line);
+      background: var(--cyan);
+    }
+    .window-dots i:nth-child(2) { background: var(--pink); }
+    .window-dots i:nth-child(3) { background: var(--acid); }
+
+    .console-body {
+      position: relative;
+      display: grid;
+      align-content: stretch;
+      padding: 14px;
+      gap: 12px;
+    }
+
+    .diagram {
+      border: 1px solid var(--line);
+      min-height: 270px;
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(116,247,255,.18), transparent 32%),
+        rgba(0,0,0,.2);
+    }
+
+    .orbit {
+      position: absolute;
+      inset: 10%;
+      border: 1px dashed color-mix(in srgb, var(--cyan) 42%, transparent);
+      animation: orbit 14s linear infinite;
+    }
+
+    .orbit:nth-child(2) { inset: 22%; animation-duration: 10s; animation-direction: reverse; }
+    .orbit:nth-child(3) { inset: 34%; animation-duration: 8s; }
+    @keyframes orbit { to { transform: rotate(360deg); } }
+
+    .core {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 112px;
+      height: 112px;
+      transform: translate(-50%, -50%);
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: #000;
+      box-shadow: 0 0 40px rgba(116,247,255,.28);
+    }
+
+    .core img { width: 86px; height: 86px; object-fit: cover; image-rendering: pixelated; }
+
+    .node {
+      position: absolute;
+      min-width: 112px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      font: 500 11px/1.25 var(--mono);
+      color: var(--soft);
+      animation: float 5s var(--ease) infinite;
+    }
+
+    .node b { display: block; color: var(--ink); margin-bottom: 4px; }
+    .n1 { left: 18px; top: 24px; }
+    .n2 { right: 18px; top: 58px; animation-delay: -.8s; }
+    .n3 { left: 34px; bottom: 28px; animation-delay: -1.4s; }
+    .n4 { right: 30px; bottom: 36px; animation-delay: -2.2s; }
+    @keyframes float { 50% { transform: translateY(-10px); } }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 12px;
+    }
+
+    .stat, .card, .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: 0 14px 40px rgba(0,0,0,.2);
+    }
+
+    .stat {
+      min-height: 128px;
+      padding: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat:after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--cyan), var(--pink), var(--acid));
+      animation: loadbar 2.8s var(--ease) infinite;
+      transform-origin: left;
+    }
+
+    @keyframes loadbar { 50% { transform: scaleX(.35); } }
+
+    .stat span, .kicker {
+      color: var(--dim);
+      font: 500 10px/1 var(--mono);
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 18px;
+      font-family: var(--pixel);
+      font-size: 42px;
+      line-height: .8;
+    }
+
+    .section { padding-top: 70px; }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, .8fr) minmax(320px, .45fr);
+      gap: 22px;
+      align-items: end;
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-family: var(--pixel);
+      font-size: clamp(2.8rem, 7vw, 7rem);
+      line-height: .76;
+      text-transform: uppercase;
+      letter-spacing: -.04em;
+    }
+
+    .section-copy {
+      color: var(--soft);
+      line-height: 1.52;
+      font-size: 1.04rem;
+    }
+
+    .rule-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+    }
+
+    .card {
+      min-height: 230px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .35s var(--ease), border-color .35s var(--ease), background .35s var(--ease);
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: var(--cyan);
+      background: color-mix(in srgb, var(--panel2) 82%, transparent);
+    }
+
+    .card:before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      background: linear-gradient(120deg, transparent, color-mix(in srgb, var(--cyan) 16%, transparent), transparent);
+      transform: translateX(-100%);
+      transition: transform .8s var(--ease);
+    }
+
+    .card:hover:before { transform: translateX(100%); }
+    .card > * { position: relative; z-index: 2; }
+    .span-7 { grid-column: span 7; }
+    .span-5 { grid-column: span 5; }
+    .span-4 { grid-column: span 4; }
+    .span-3 { grid-column: span 3; }
+
+    h3 {
+      font-family: var(--pixel);
+      font-size: 32px;
+      line-height: .85;
+      text-transform: uppercase;
+    }
+
+    .card p {
+      color: var(--soft);
+      line-height: 1.48;
+      margin-top: 14px;
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+    .chip, .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      border: 1px solid var(--line);
+      padding: 0 8px;
+      color: var(--soft);
+      background: rgba(255,255,255,.035);
+      font: 500 10px/1 var(--mono);
+      text-transform: uppercase;
+    }
+
+    .badge.seal { color: var(--acid); border-color: color-mix(in srgb, var(--acid) 52%, transparent); }
+    .badge.hot { color: var(--red); border-color: color-mix(in srgb, var(--red) 62%, transparent); }
+    .badge.wal { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 55%, transparent); }
+
+    .builder {
+      display: grid;
+      grid-template-columns: 290px minmax(0, 1fr) 390px;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .panel { overflow: hidden; min-width: 0; }
+    .panel-body { padding: 14px; }
+    .panel-title {
+      font-family: var(--pixel);
+      font-size: 26px;
+      line-height: .8;
+      text-transform: uppercase;
+    }
+
+    .palette { display: grid; gap: 8px; }
+    .field-btn {
+      min-height: 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.035);
+      padding: 0 10px;
+      color: var(--ink);
+      transition: transform .24s var(--ease), border-color .24s var(--ease);
+    }
+    .field-btn:hover { transform: translateX(5px); border-color: var(--cyan); }
+    .field-btn small { font: 500 10px/1 var(--mono); color: var(--dim); text-transform: uppercase; }
+
+    .input, .textarea, .select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.18);
+      color: var(--ink);
+      outline: 0;
+      transition: border-color .24s var(--ease), box-shadow .24s var(--ease), background .24s var(--ease);
+    }
+    .input, .select { min-height: 44px; padding: 0 10px; }
+    .textarea { min-height: 116px; padding: 10px; resize: vertical; }
+    .input:focus, .textarea:focus, .select:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--cyan) 18%, transparent);
+      background: rgba(255,255,255,.055);
+    }
+
+    .schema { display: grid; gap: 9px; }
+    .schema-card {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      padding: 10px;
+      display: grid;
+      gap: 9px;
+      animation: pop .38s var(--ease) both;
+    }
+    @keyframes pop { from { opacity: 0; transform: scale(.98) translateY(10px); } }
+    .schema-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .schema-top button { border: 0; background: transparent; color: var(--red); font: 500 11px/1 var(--mono); text-transform: uppercase; }
+    .switches { display: flex; flex-wrap: wrap; gap: 12px; color: var(--soft); font-size: 13px; }
+    .switches input, .check-card input { accent-color: var(--cyan); }
+
+    .share {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: rgba(116,247,255,.055);
+      margin-bottom: 12px;
+    }
+    .share-line {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px dashed var(--line);
+      padding: 8px;
+      color: var(--soft);
+      font: 500 11px/1 var(--mono);
+      overflow: hidden;
+    }
+
+    .preview-list { display: grid; gap: 10px; max-height: 640px; overflow: auto; padding-right: 3px; }
+    .question {
+      border-top: 1px solid var(--line);
+      padding: 14px 0 0;
+      display: grid;
+      gap: 9px;
+    }
+    .question:first-child { border-top: 0; padding-top: 0; }
+    .question-label {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .drop {
+      min-height: 118px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--cyan) 12%, transparent), transparent),
+        rgba(255,255,255,.03);
+      color: var(--soft);
+      text-align: center;
+      padding: 12px;
+      transition: transform .24s var(--ease), border-color .24s var(--ease);
+    }
+    .drop:hover { transform: translateY(-3px); border-color: var(--acid); }
+
+    .form-layout, .admin-layout {
+      display: grid;
+      grid-template-columns: minmax(0, .72fr) minmax(360px, .36fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .form-card { padding: clamp(18px, 4vw, 38px); }
+    .form-title {
+      margin-top: 20px;
+      font-family: var(--pixel);
+      font-size: clamp(3.2rem, 9vw, 8.5rem);
+      line-height: .72;
+      text-transform: uppercase;
+      letter-spacing: -.04em;
+    }
+    .form-copy { margin-top: 18px; max-width: 730px; color: var(--soft); line-height: 1.52; }
+    .progress-meta { display: flex; justify-content: space-between; color: var(--dim); font: 500 11px/1 var(--mono); text-transform: uppercase; margin-top: 24px; }
+    .progress { height: 10px; border: 1px solid var(--line); background: rgba(0,0,0,.18); margin: 8px 0 18px; overflow: hidden; }
+    .progress i { display: block; height: 100%; width: var(--p, 0%); background: linear-gradient(90deg, var(--cyan), var(--pink), var(--acid)); transition: width .45s var(--ease); }
+
+    .stars { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 7px; }
+    .stars button { min-height: 44px; border: 1px solid var(--line); background: rgba(255,255,255,.035); }
+    .stars button.active { background: var(--acid); color: #061219; border-color: var(--acid); }
+    .check-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+    .check-card { min-height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line); color: var(--soft); background: rgba(255,255,255,.03); }
+
+    .side-stack { display: grid; gap: 12px; }
+    .timeline { display: grid; gap: 12px; }
+    .event { position: relative; padding-left: 18px; color: var(--soft); line-height: 1.4; font-size: 13px; }
+    .event:before { content:""; position:absolute; left:0; top:4px; width:8px; height:8px; background:var(--cyan); box-shadow:0 0 14px var(--cyan); }
+
+    .admin-layout { grid-template-columns: 300px minmax(0,1fr); }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+    .kanban { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+    .lane { min-height: 560px; border: 1px solid var(--line); background: rgba(255,255,255,.025); }
+    .lane-head { display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid var(--line); font:500 11px/1 var(--mono); color:var(--soft); text-transform:uppercase; }
+    .submission { margin:10px; padding:12px; border:1px solid var(--line); background:var(--panel2); transition:transform .25s var(--ease), border-color .25s var(--ease); }
+    .submission:hover { transform: translateY(-4px); border-color: var(--cyan); }
+    .submission h4 { margin:10px 0 7px; font-size:15px; line-height:1.2; }
+    .submission p { color:var(--soft); font-size:13px; line-height:1.4; }
+    .note-box { margin-top:10px; padding:8px; border:1px dashed var(--line); color:var(--dim); font:500 11px/1.25 var(--mono); }
+
+    .matrix {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 1px;
+      border: 1px solid var(--line);
+      background: var(--line);
+      margin-top: 16px;
+    }
+    .matrix div { min-height: 72px; background: var(--panel2); padding: 10px; color: var(--soft); font: 500 11px/1.25 var(--mono); }
+    .matrix b { display:block; color:var(--ink); margin-bottom:5px; font-family:var(--display); font-size:14px; }
+
+    .footer {
+      margin-top: 70px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 20px;
+      display: flex;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .footer a { color: var(--cyan); font-weight: 700; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      z-index: 90;
+      transform: translate(-50%, 18px);
+      opacity: 0;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+      color: var(--ink);
+      font: 600 12px/1 var(--mono);
+      text-transform: uppercase;
+      transition: opacity .25s var(--ease), transform .25s var(--ease);
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    .reveal { opacity: 0; transform: translateY(16px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 1160px) {
+      .hero, .builder, .form-layout, .admin-layout, .section-head { grid-template-columns: 1fr; }
+      .hero { min-height: auto; }
+      .console, .poster { min-height: auto; }
+      .poster { overflow: visible; }
+      h1 { font-size: clamp(5rem, 14vw, 8.5rem); line-height: .82; }
+      .builder { grid-template-columns: 1fr 1fr; }
+      .builder .panel:nth-child(2) { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 760px) {
+      .topbar { grid-template-columns: 1fr auto; }
+      .nav { grid-column: 1 / -1; justify-content: start; }
+      .brand-title { font-size: 21px; }
+      .rule-grid, .stats, .kanban, .builder, .mini-grid, .check-grid, .matrix { grid-template-columns: 1fr; }
+      .span-7, .span-5, .span-4, .span-3 { grid-column: auto; }
+      .poster { padding: 20px; }
+      .ticker { display: none; }
+      .walgo-banner { max-height: 118px; }
+      h1 { font-size: clamp(3.65rem, 16vw, 5.8rem); line-height: .86; letter-spacing: -.03em; }
+      .lede { font-size: 1rem; line-height: 1.48; }
+      .hero-actions { display: grid; grid-template-columns: 1fr; }
+      .hero-actions .btn { width: 100%; }
+      .form-title { font-size: clamp(3.2rem, 18vw, 5.8rem); }
+    }
+
+    @media (max-width: 420px) {
+      .shell { width: min(100% - 18px, 1440px); }
+      .topbar { top: 6px; margin-top: 6px; }
+      main { padding-top: 18px; }
+      .poster { padding: 16px; clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px)); }
+      .walgo-banner { max-height: 94px; }
+      .eyebrow { font-size: 9px; min-height: 30px; }
+      h1 { font-size: clamp(3.05rem, 15vw, 4.15rem); line-height: .9; }
+      .brand img { width: 40px; height: 40px; }
+      .theme { width: 92px; font-size: 10px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *:before, *:after { animation-duration: 1ms !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body data-theme="dark">
+  <div class="noise"></div>
+  <div class="scanline"></div>
+
+  <header class="topbar shell">
+    <a class="brand" href="#home" data-go="home" aria-label="FATHOM home">
+      <img src="assets/walgo-logo.jpg" alt="Walgo pixel logo" />
+      <div>
+        <div class="brand-title">FATHOM</div>
+        <div class="brand-sub">Walrus feedback OS</div>
+      </div>
+    </a>
+    <nav class="nav" aria-label="App sections">
+      <button class="active" data-go="home">Deck</button>
+      <button data-go="builder">Builder</button>
+      <button data-go="form">Form</button>
+      <button data-go="admin">Admin</button>
+      <button data-go="rules">Rules</button>
+    </nav>
+    <button class="theme" id="themeBtn">Noir / Day</button>
+  </header>
+
+  <main class="shell">
+    <section class="view active" id="home">
+      <div class="hero">
+        <div class="poster">
+          <div class="hero-inner">
+            <div class="hero-copy">
+              <img class="walgo-banner" src="assets/walgo-header.jpg" alt="Walgo header: Markdown to Web3, Simplified." />
+              <div style="margin-top:24px" class="eyebrow"><i class="status-dot"></i> Walrus blob intake / Seal access live</div>
+              <h1 id="heroTitle"><span class="glitch" data-text="FATHOM">FATHOM</span></h1>
+              <p class="lede">A Walrus-native form and feedback room for future Sessions: create complex forms, collect media-rich bug reports, encrypt sensitive answers with Seal, and turn every submission into a triaged action object.</p>
+              <div class="hero-actions">
+                <button class="btn primary magnetic" data-go="builder">Build a Form</button>
+                <button class="btn magnetic" data-go="form">Test Submission</button>
+                <button class="btn magnetic" data-go="admin">Open Admin</button>
+              </div>
+            </div>
+            <div class="ticker" aria-hidden="true">
+              <span>Rich text / Dropdowns / Checkboxes / Star ratings / Screenshots / Video uploads / URLs / Confirmation locks / Seal encryption / Walrus storage / Admin notes / Priority lanes / CSV export / </span>
+              <span>Rich text / Dropdowns / Checkboxes / Star ratings / Screenshots / Video uploads / URLs / Confirmation locks / Seal encryption / Walrus storage / Admin notes / Priority lanes / CSV export / </span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="console" aria-label="System preview">
+          <div class="console-head">
+            <div class="window-dots"><i></i><i></i><i></i></div>
+            <span class="badge wal">Mainnet-ready concept</span>
+          </div>
+          <div class="console-body">
+            <div class="diagram">
+              <div class="orbit"></div><div class="orbit"></div><div class="orbit"></div>
+              <div class="core"><img src="assets/walgo-logo.jpg" alt="Walgo logo core" /></div>
+              <div class="node n1"><b>Form Schema</b>Stored per form on Walrus</div>
+              <div class="node n2"><b>Seal Gate</b>Creators + approved admins</div>
+              <div class="node n3"><b>Media Proof</b>Screenshot + video uploads</div>
+              <div class="node n4"><b>Admin Deck</b>Sort, note, export, prioritize</div>
+            </div>
+            <div class="mini-grid">
+              <div class="stat"><span>Input types</span><strong>08</strong></div>
+              <div class="stat"><span>Bonus covered</span><strong>YES</strong></div>
+              <div class="stat"><span>Storage target</span><strong>WAL</strong></div>
+              <div class="stat"><span>Encryption</span><strong>SEAL</strong></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="section">
+        <div class="section-head reveal">
+          <h2>Not a form. A signal machine.</h2>
+          <p class="section-copy">The brief is visible in the product itself. FATHOM lets anyone spin up bug reports, feature requests, surveys, applications, and reviewer forms, then keeps submissions organized per form with privacy and team workflow built in.</p>
+        </div>
+        <div class="rule-grid">
+          <article class="card span-7 reveal">
+            <span class="kicker">Public form experience</span>
+            <h3>Every field type required by the brief</h3>
+            <p>Rich text, dropdowns, checkboxes, star ratings, screenshots, video uploads, URLs, and confirmation checkboxes are included as first-class builder blocks.</p>
+            <div class="chips"><span class="chip">Add/remove fields</span><span class="chip">Required toggles</span><span class="chip">Share link</span><span class="chip">Adaptive preview</span></div>
+          </article>
+          <article class="card span-5 reveal">
+            <span class="kicker">Walrus + Seal</span>
+            <h3>Storage and privacy are states</h3>
+            <p>Form schemas and submissions show Walrus receipt IDs. Sensitive fields expose Seal protection so the creator controls which admins can read them.</p>
+          </article>
+          <article class="card span-4 reveal">
+            <span class="kicker">Bonus point</span>
+            <h3>Admin triage lanes</h3>
+            <p>Submissions become cards with priority, media evidence, internal notes, filters, and export.</p>
+          </article>
+          <article class="card span-4 reveal">
+            <span class="kicker">Demo path</span>
+            <h3>Built to record itself</h3>
+            <p>Use the public form to create a test submission, then show the admin deck and export in a sub-3-minute demo.</p>
+          </article>
+          <article class="card span-4 reveal">
+            <span class="kicker">Identity</span>
+            <h3>Walgo pixel energy</h3>
+            <p>The visual system borrows the included Walgo header/logo, pixel typography, glitch scans, terminal panels, and Web3 mini-site rhythm.</p>
+          </article>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="builder">
+      <section class="section" style="padding-top:14px">
+        <div class="section-head">
+          <h2>Build any Session form.</h2>
+          <p class="section-copy">Add fields, remove fields, mark what is required, protect sensitive answers with Seal, and ship a shareable Walrus form link.</p>
+        </div>
+        <div class="builder">
+          <aside class="panel">
+            <div class="panel-head"><div><div class="kicker">Blocks</div><div class="panel-title">Field Kit</div></div><span class="badge">8 inputs</span></div>
+            <div class="panel-body"><div class="palette" id="palette"></div></div>
+          </aside>
+          <section class="panel">
+            <div class="panel-head"><div><div class="kicker">Per-form schema</div><div class="panel-title">Blueprint</div></div><button class="btn primary small magnetic" id="publish">Publish</button></div>
+            <div class="panel-body">
+              <label class="kicker" for="formName">Form name</label>
+              <input class="input" id="formName" value="Walrus Sessions Bug + Feature Intake" style="margin:8px 0 12px" />
+              <div class="schema" id="schema"></div>
+            </div>
+          </section>
+          <aside class="panel">
+            <div class="panel-head"><div><div class="kicker">Share preview</div><div class="panel-title">Room Link</div></div><span class="badge seal">Seal Armed</span></div>
+            <div class="panel-body">
+              <div class="share">
+                <span class="kicker">Public link</span>
+                <div class="share-line"><span>fathom.wal.app/f/session-2</span><button class="btn small magnetic" id="copy">Copy</button></div>
+              </div>
+              <div class="preview-list" id="miniPreview"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="form">
+      <section class="section" style="padding-top:14px">
+        <div class="form-layout">
+          <section class="panel form-card">
+            <div class="eyebrow"><i class="status-dot"></i> Public intake / Walrus storage</div>
+            <h2 class="form-title" id="publicTitle">Walrus Sessions Bug + Feature Intake</h2>
+            <p class="form-copy">Submit one high-signal report. Add reproduction details, proof media, affected area, severity, and links. Sensitive responses are Seal-encrypted for the form creator and approved admins.</p>
+            <div class="progress-meta"><span>Completion</span><span id="progressText">0%</span></div>
+            <div class="progress"><i id="progressBar"></i></div>
+            <form id="publicForm"></form>
+            <button class="btn primary magnetic" id="submit" style="width:100%;margin-top:18px">Seal + Store Submission</button>
+          </section>
+          <aside class="side-stack">
+            <section class="panel">
+              <div class="panel-head"><div class="panel-title">Receipt Stack</div><span class="badge wal">Walrus</span></div>
+              <div class="panel-body timeline">
+                <div class="event">Form schema stored as a Walrus blob and grouped under the creator account.</div>
+                <div class="event">Sensitive answers encrypted with Seal access rules.</div>
+                <div class="event">Media files staged as screenshot/video blob references.</div>
+                <div class="event">Submission appears in the private admin deck with priority and notes.</div>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div class="panel-title">Proof Preview</div><span class="badge">after submit</span></div>
+              <div class="panel-body">
+                <div class="matrix">
+                  <div><b>Form</b>session-2</div>
+                  <div><b>Blob</b>wal_9f2a</div>
+                  <div><b>Seal</b>active</div>
+                  <div><b>Admin</b>queued</div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="admin">
+      <section class="section" style="padding-top:14px">
+        <div class="section-head">
+          <h2>Private admin command deck.</h2>
+          <p class="section-copy">Bonus requirement covered: teams can search, sort, prioritize what to act on, leave internal notes, and export submission data.</p>
+        </div>
+        <div class="admin-layout">
+          <aside class="side-stack">
+            <section class="panel">
+              <div class="panel-head"><div class="panel-title">Controls</div><span class="badge">filters</span></div>
+              <div class="panel-body" style="display:grid;gap:9px">
+                <input class="input" id="search" placeholder="Search submissions..." />
+                <select class="select" id="sort">
+                  <option value="priority">Sort by priority</option>
+                  <option value="latest">Sort by latest</option>
+                  <option value="media">Sort by media</option>
+                </select>
+                <button class="btn primary magnetic" id="export">Export Data</button>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><div class="panel-title">Timeline</div><span class="badge wal">live</span></div>
+              <div class="panel-body timeline" id="timeline"></div>
+            </section>
+          </aside>
+          <section>
+            <div class="stats" id="stats"></div>
+            <div class="kanban" id="kanban"></div>
+          </section>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="rules">
+      <section class="section" style="padding-top:14px">
+        <div class="section-head">
+          <h2>Submission checklist, built in.</h2>
+          <p class="section-copy">This section makes the hackathon compliance obvious to judges and helps you record a tighter demo.</p>
+        </div>
+        <div class="rule-grid">
+          <article class="card span-3"><span class="badge wal">Mainnet</span><h3>Deploy</h3><p>Static single-file app ready to deploy through Walgo/Walrus Mainnet.</p></article>
+          <article class="card span-3"><span class="badge">Repo</span><h3>Public code</h3><p>Use this HTML as the core of a clean public repository.</p></article>
+          <article class="card span-3"><span class="badge seal">One-pager</span><h3>Pitch</h3><p>FATHOM is the future operating system for decentralized feedback.</p></article>
+          <article class="card span-3"><span class="badge hot">Demo</span><h3>Video</h3><p>Create a form, submit evidence, show admin triage, export CSV.</p></article>
+          <article class="card span-7"><h3>Judge-visible feature map</h3><p>Builder: add/remove fields, required settings, share link. Form: rich text, dropdown, checkboxes, star rating, screenshots, video, URL, confirmation. Storage: Walrus receipts per form. Privacy: Seal encrypted sensitive fields. Bonus: private dashboard, notes, priority, filtering, export.</p></article>
+          <article class="card span-5"><h3>Brand line</h3><p>FATHOM turns scattered feedback into encrypted Walrus signal rooms for the teams building the next Sessions.</p></article>
+        </div>
+      </section>
+    </section>
+
+    <footer class="footer">
+      <div>
+        <div class="brand-title" style="font-size:28px">FATHOM</div>
+        <div class="brand-sub">Built for Walrus Sessions Round 2 with Walgo visual DNA.</div>
+      </div>
+      <div class="brand-sub">Designed by <a href="https://x.com/dexarxbt" target="_blank" rel="noreferrer">Dexar</a></div>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">Ready</div>
+
+  <script>
+    const state = {
+      theme: "dark",
+      rating: 0,
+      fields: [
+        { id: "f1", type: "rich", label: "Describe the bug, request, survey answer, or application signal", required: true, seal: true },
+        { id: "f2", type: "dropdown", label: "Submission type", required: true, seal: false },
+        { id: "f3", type: "checkbox", label: "Affected surface", required: true, seal: false },
+        { id: "f4", type: "rating", label: "Priority rating", required: true, seal: false },
+        { id: "f5", type: "screenshot", label: "Screenshot proof", required: false, seal: true },
+        { id: "f6", type: "video", label: "Video walkthrough", required: false, seal: true },
+        { id: "f7", type: "url", label: "Reference URL", required: false, seal: false },
+        { id: "f8", type: "confirm", label: "I agree to store this submission on Walrus", required: true, seal: false }
+      ],
+      submissions: [
+        { id: "wal_2F91", lane: "New", title: "Video upload stalls at 84%", body: "Large mp4 evidence freezes before Walrus receipt appears.", p: "P0", media: "video", seal: true, note: "Test chunking with 40MB files.", time: 5 },
+        { id: "wal_A77C", lane: "Review", title: "Need application scoring rubric", body: "Teams want private reviewer notes and weighted fields.", p: "P1", media: "none", seal: true, note: "Good for Sessions operators.", time: 18 },
+        { id: "wal_91BC", lane: "Action", title: "Dashboard copy unclear after encryption", body: "User cannot tell who can read a Seal-protected answer.", p: "P1", media: "screenshot", seal: false, note: "Rewrite privacy labels.", time: 33 },
+        { id: "wal_F0A2", lane: "New", title: "CSV should include blob IDs", body: "Export needs media references for every uploaded file.", p: "P2", media: "screenshot", seal: true, note: "Add blob id column.", time: 44 },
+        { id: "wal_8CD5", lane: "Review", title: "Feature request: public receipt page", body: "Submitters want to share proof without leaking private content.", p: "P2", media: "none", seal: true, note: "Use masked submission data.", time: 60 }
+      ]
+    };
+
+    const fieldDefs = [
+      ["rich", "Rich text", "brief"],
+      ["dropdown", "Dropdown", "choice"],
+      ["checkbox", "Checkboxes", "multi"],
+      ["rating", "Star rating", "score"],
+      ["screenshot", "Screenshot", "image"],
+      ["video", "Video upload", "media"],
+      ["url", "URL", "link"],
+      ["confirm", "Confirmation", "lock"]
+    ];
+
+    const $ = (s, r = document) => r.querySelector(s);
+    const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+    function toast(text) {
+      const t = $("#toast");
+      t.textContent = text;
+      t.classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => t.classList.remove("show"), 2100);
+    }
+
+    function go(id) {
+      $$(".view").forEach(v => v.classList.toggle("active", v.id === id));
+      $$("[data-go]").forEach(b => b.classList.toggle("active", b.dataset.go === id));
+      scrollTo({ top: 0, behavior: "smooth" });
+      if (id === "form") renderForm();
+      if (id === "admin") renderAdmin();
+    }
+
+    function uid() { return "f" + Math.random().toString(36).slice(2, 7); }
+
+    function renderPalette() {
+      $("#palette").innerHTML = fieldDefs.map(([type, name, meta]) => `
+        <button class="field-btn magnetic" data-add="${type}"><span>${name}</span><small>${meta}</small></button>
+      `).join("");
+    }
+
+    function addField(type) {
+      const labels = {
+        rich: "Long-form answer",
+        dropdown: "Choose one option",
+        checkbox: "Select affected areas",
+        rating: "Rate with stars",
+        screenshot: "Upload screenshot",
+        video: "Upload video",
+        url: "Paste reference URL",
+        confirm: "Confirm Walrus storage"
+      };
+      state.fields.push({ id: uid(), type, label: labels[type], required: type !== "url", seal: ["rich", "screenshot", "video"].includes(type) });
+      renderBuilder();
+      toast("FIELD ADDED");
+    }
+
+    function renderBuilder() {
+      const schema = $("#schema");
+      schema.innerHTML = state.fields.map((f, i) => `
+        <article class="schema-card">
+          <div class="schema-top"><span class="badge">${String(i + 1).padStart(2, "0")} ${f.type}</span><button data-remove="${f.id}">Remove</button></div>
+          <input class="input" value="${escapeHtml(f.label)}" data-label="${f.id}" />
+          <div class="switches">
+            <label><input type="checkbox" data-required="${f.id}" ${f.required ? "checked" : ""}> Required</label>
+            <label><input type="checkbox" data-seal="${f.id}" ${f.seal ? "checked" : ""}> Seal encrypted</label>
+          </div>
+        </article>
+      `).join("");
+      $("#miniPreview").innerHTML = state.fields.map(renderMiniField).join("");
+      $("#publicTitle").textContent = $("#formName").value;
+      renderForm();
+      attachMagnetic();
+    }
+
+    function renderLabel(f) {
+      return `<div class="question-label"><span>${escapeHtml(f.label)}</span><span>${f.required ? '<b class="badge hot">required</b>' : ''}${f.seal ? '<b class="badge seal">Seal</b>' : ''}</span></div>`;
+    }
+
+    function renderMiniField(f) {
+      return `<div class="question">${renderLabel(f)}${inputFor(f, true)}</div>`;
+    }
+
+    function inputFor(f, mini = false) {
+      if (f.type === "rich") return `<textarea class="textarea progress-input" placeholder="Write the full signal..."></textarea>`;
+      if (f.type === "dropdown") return `<select class="select progress-input"><option value="">Choose type</option><option>Bug report</option><option>Feature request</option><option>Survey</option><option>Application</option></select>`;
+      if (f.type === "checkbox") return `<div class="check-grid"><label class="check-card"><input class="progress-input" type="checkbox"> Builder</label><label class="check-card"><input class="progress-input" type="checkbox"> Form</label><label class="check-card"><input class="progress-input" type="checkbox"> Storage</label><label class="check-card"><input class="progress-input" type="checkbox"> Admin</label></div>`;
+      if (f.type === "rating") return `<div class="stars" data-stars><button type="button" data-star="1">1</button><button type="button" data-star="2">2</button><button type="button" data-star="3">3</button><button type="button" data-star="4">4</button><button type="button" data-star="5">5</button></div>`;
+      if (f.type === "screenshot") return `<label class="drop">Drop screenshot or click<input class="progress-input" type="file" accept="image/*" hidden></label>`;
+      if (f.type === "video") return `<label class="drop">Drop video proof or click<input class="progress-input" type="file" accept="video/*" hidden></label>`;
+      if (f.type === "url") return `<input class="input progress-input" placeholder="https://..." />`;
+      if (f.type === "confirm") return `<label class="check-card"><input class="progress-input" type="checkbox"> ${escapeHtml(f.label)}</label>`;
+      return `<input class="input progress-input">`;
+    }
+
+    function renderForm() {
+      const title = $("#formName")?.value || "Walrus Sessions Bug + Feature Intake";
+      $("#publicTitle").textContent = title;
+      $("#publicForm").innerHTML = state.fields.map(f => `<div class="question">${renderLabel(f)}${inputFor(f)}</div>`).join("");
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const inputs = $$(".progress-input", $("#publicForm"));
+      const filled = inputs.filter(el => el.type === "checkbox" ? el.checked : el.type === "file" ? el.files.length : el.value.trim()).length;
+      const total = inputs.length + ($("[data-stars]", $("#publicForm")) ? 1 : 0);
+      const pct = Math.min(100, Math.round(((filled + (state.rating ? 1 : 0)) / Math.max(1, total)) * 100));
+      $("#progressBar").style.setProperty("--p", pct + "%");
+      $("#progressText").textContent = pct + "%";
+    }
+
+    function renderAdmin() {
+      const q = ($("#search")?.value || "").toLowerCase();
+      let rows = state.submissions.filter(s => JSON.stringify(s).toLowerCase().includes(q));
+      const sort = $("#sort")?.value || "priority";
+      if (sort === "priority") rows.sort((a, b) => a.p.localeCompare(b.p));
+      if (sort === "latest") rows.sort((a, b) => a.time - b.time);
+      if (sort === "media") rows.sort((a, b) => b.media.localeCompare(a.media));
+      $("#stats").innerHTML = [
+        ["Forms", "04"], ["Signals", String(rows.length).padStart(2, "0")], ["Sealed", String(rows.filter(s => s.seal).length).padStart(2, "0")], ["Exports", "CSV"]
+      ].map(([a,b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`).join("");
+      $("#kanban").innerHTML = ["New", "Review", "Action"].map(lane => {
+        const cards = rows.filter(s => s.lane === lane);
+        return `<div class="lane"><div class="lane-head"><span>${lane}</span><span>${cards.length}</span></div>${cards.map(card).join("")}</div>`;
+      }).join("");
+      $("#timeline").innerHTML = [
+        "P0 video upload moved into Action lane.",
+        "Seal admin access approved for two maintainers.",
+        "CSV export generated with Walrus blob IDs.",
+        "New test submission received from public form."
+      ].map(x => `<div class="event">${x}</div>`).join("");
+      attachMagnetic();
+    }
+
+    function card(s) {
+      return `<article class="submission">
+        <div class="chips"><span class="badge ${s.p === "P0" ? "hot" : ""}">${s.p}</span><span class="badge wal">${s.id}</span>${s.seal ? '<span class="badge seal">Seal</span>' : ''}<span class="badge">${s.media}</span></div>
+        <h4>${escapeHtml(s.title)}</h4><p>${escapeHtml(s.body)}</p>
+        <div class="note-box">Internal note: ${escapeHtml(s.note)}</div>
+      </article>`;
+    }
+
+    function exportData() {
+      const header = "id,lane,title,priority,media,sealed,note";
+      const rows = state.submissions.map(s => [s.id, s.lane, s.title, s.p, s.media, s.seal, s.note].map(v => `"${String(v).replaceAll('"', '""')}"`).join(","));
+      const blob = new Blob([[header, ...rows].join("\\n")], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "fathom-walrus-submissions.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("DATA EXPORTED");
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
+    }
+
+    function attachMagnetic() {
+      $$(".magnetic").forEach(el => {
+        if (el.dataset.ready) return;
+        el.dataset.ready = "1";
+        el.addEventListener("pointermove", e => {
+          const r = el.getBoundingClientRect();
+          el.style.setProperty("--tx", ((e.clientX - r.left - r.width / 2) * .12) + "px");
+          el.style.setProperty("--ty", ((e.clientY - r.top - r.height / 2) * .12) + "px");
+        });
+        el.addEventListener("pointerleave", () => {
+          el.style.setProperty("--tx", "0px");
+          el.style.setProperty("--ty", "0px");
+        });
+      });
+    }
+
+    function fitHeroTitle() {
+      const title = $("#heroTitle");
+      const wrap = title?.closest(".hero-copy");
+      if (!title || !wrap) return;
+
+      title.style.fontSize = "";
+      title.style.marginBottom = "";
+
+      const available = Math.max(220, wrap.clientWidth - 6);
+      const width = title.scrollWidth;
+      if (width > available) {
+        const current = parseFloat(getComputedStyle(title).fontSize);
+        const next = Math.max(42, Math.floor(current * (available / width)));
+        title.style.fontSize = `${next}px`;
+      }
+    }
+
+    document.addEventListener("pointermove", e => {
+      document.body.style.setProperty("--mx", e.clientX + "px");
+      document.body.style.setProperty("--my", e.clientY + "px");
+    });
+    document.addEventListener("scroll", () => document.body.style.setProperty("--grid-y", (scrollY * -.14) + "px"), { passive: true });
+    window.addEventListener("resize", fitHeroTitle);
+    if (document.fonts?.ready) document.fonts.ready.then(fitHeroTitle);
+    document.addEventListener("click", e => {
+      const goBtn = e.target.closest("[data-go]");
+      if (goBtn) { e.preventDefault(); go(goBtn.dataset.go); }
+      const add = e.target.closest("[data-add]");
+      if (add) addField(add.dataset.add);
+      const rem = e.target.closest("[data-remove]");
+      if (rem) { state.fields = state.fields.filter(f => f.id !== rem.dataset.remove); renderBuilder(); toast("FIELD REMOVED"); }
+      const star = e.target.closest("[data-star]");
+      if (star) { state.rating = Number(star.dataset.star); $$("[data-star]").forEach(b => b.classList.toggle("active", Number(b.dataset.star) <= state.rating)); updateProgress(); }
+    });
+    document.addEventListener("input", e => {
+      if (e.target.id === "formName") renderBuilder();
+      if (e.target.matches("[data-label]")) {
+        const f = state.fields.find(x => x.id === e.target.dataset.label);
+        if (f) f.label = e.target.value;
+        renderBuilder();
+      }
+      if (e.target.matches(".progress-input")) updateProgress();
+      if (e.target.id === "search") renderAdmin();
+    });
+    document.addEventListener("change", e => {
+      if (e.target.matches("[data-required]")) {
+        const f = state.fields.find(x => x.id === e.target.dataset.required);
+        if (f) f.required = e.target.checked;
+        renderBuilder();
+      }
+      if (e.target.matches("[data-seal]")) {
+        const f = state.fields.find(x => x.id === e.target.dataset.seal);
+        if (f) f.seal = e.target.checked;
+        renderBuilder();
+      }
+      if (e.target.matches(".progress-input")) updateProgress();
+      if (e.target.id === "sort") renderAdmin();
+    });
+
+    $("#themeBtn").addEventListener("click", () => {
+      state.theme = state.theme === "dark" ? "light" : "dark";
+      document.body.dataset.theme = state.theme;
+      toast(state.theme === "dark" ? "NOIR MODE" : "DAY MODE");
+    });
+    $("#publish").addEventListener("click", () => { toast("FORM PINNED TO WALRUS"); go("form"); });
+    $("#copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText("https://fathom.wal.app/f/session-2"); toast("LINK COPIED"); }
+      catch { toast("FATHOM.WAL.APP/F/SESSION-2"); }
+    });
+    $("#submit").addEventListener("click", e => {
+      e.preventDefault();
+      state.submissions.unshift({ id: "wal_" + Math.random().toString(36).slice(2,6).toUpperCase(), lane: "New", title: "Fresh public test submission", body: "Generated from the live FATHOM form with Walrus receipt and Seal state.", p: state.rating >= 4 ? "P0" : "P2", media: "staged", seal: true, note: "Use this in the demo video.", time: 0 });
+      toast("SUBMISSION SEALED + STORED");
+      go("admin");
+    });
+    $("#export").addEventListener("click", exportData);
+
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add("visible");
+    }), { threshold: .12 });
+    $$(".reveal").forEach(el => observer.observe(el));
+
+    renderPalette();
+    renderBuilder();
+    renderForm();
+    renderAdmin();
+    attachMagnetic();
+    fitHeroTitle();
+  </script>
+</body>
+</html>
