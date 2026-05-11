@@ -292,6 +292,33 @@
       text-transform: uppercase;
     }
 
+    #walletBtn.connected {
+      color: var(--mint);
+      border-color: var(--mint);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      justify-content: end;
+    }
+
+    #themeBtn {
+      width: 48px;
+      padding: 0;
+      font-size: 18px;
+    }
+
+    #walletBtn {
+      width: auto;
+      max-width: min(520px, 38vw);
+      white-space: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
     main { padding: 26px 0 70px; }
     .view { display: none; animation: enter .65s var(--ease) both; }
     .view.active { display: block; }
@@ -996,6 +1023,8 @@
     @media (max-width: 760px) {
       .topbar { grid-template-columns: 1fr auto; }
       .nav { grid-column: 1 / -1; justify-content: start; }
+      .top-actions { grid-column: 1 / -1; justify-content: stretch; }
+      #walletBtn { max-width: none; flex: 1; }
       .brand-title { font-size: 21px; }
       .rule-grid, .stats, .kanban, .builder, .mini-grid, .check-grid, .matrix { grid-template-columns: 1fr; }
       .span-7, .span-5, .span-4, .span-3 { grid-column: auto; }
@@ -1052,9 +1081,11 @@
       <button data-go="builder">Builder</button>
       <button data-go="form">Form</button>
       <button data-go="admin">Admin</button>
-      <button data-go="rules">Rules</button>
     </nav>
-    <button class="theme" id="themeBtn">Noir / Day</button>
+    <div class="top-actions">
+      <button class="theme" id="walletBtn">Connect Wallet</button>
+      <button class="theme" id="themeBtn" aria-label="Toggle light mode" title="Toggle light mode">&#9728;</button>
+    </div>
   </header>
 
   <main class="shell">
@@ -1083,7 +1114,7 @@
         <aside class="console" aria-label="System preview">
           <div class="console-head">
             <div class="window-dots"><i></i><i></i><i></i></div>
-            <span class="badge wal">Mainnet-ready concept</span>
+            <span class="badge wal">Live on Mainnet</span>
           </div>
           <div class="console-body">
             <div class="diagram">
@@ -1125,11 +1156,6 @@
             <span class="kicker">Bonus point</span>
             <h3>Admin triage lanes</h3>
             <p>Submissions become cards with priority, media evidence, internal notes, filters, and export.</p>
-          </article>
-          <article class="card span-4 reveal">
-            <span class="kicker">Demo path</span>
-            <h3>Built to record itself</h3>
-            <p>Use the public form to create a test submission, then show the admin deck and export in a sub-3-minute demo.</p>
           </article>
           <article class="card span-4 reveal">
             <span class="kicker">Identity</span>
@@ -1244,23 +1270,6 @@
       </section>
     </section>
 
-    <section class="view" id="rules">
-      <section class="section" style="padding-top:14px">
-        <div class="section-head">
-          <h2>Submission checklist, built in.</h2>
-          <p class="section-copy">This section makes the hackathon compliance obvious to judges and helps you record a tighter demo.</p>
-        </div>
-        <div class="rule-grid">
-          <article class="card span-3"><span class="badge wal">Mainnet</span><h3>Deploy</h3><p>Static single-file app ready to deploy through Walgo/Walrus Mainnet.</p></article>
-          <article class="card span-3"><span class="badge">Repo</span><h3>Public code</h3><p>Use this HTML as the core of a clean public repository.</p></article>
-          <article class="card span-3"><span class="badge seal">One-pager</span><h3>Pitch</h3><p>FATHOM is the future operating system for decentralized feedback.</p></article>
-          <article class="card span-3"><span class="badge hot">Demo</span><h3>Video</h3><p>Create a form, submit evidence, show admin triage, export CSV.</p></article>
-          <article class="card span-7"><h3>Judge-visible feature map</h3><p>Builder: add/remove fields, required settings, share link. Form: rich text, dropdown, checkboxes, star rating, screenshots, video, URL, confirmation. Storage: Walrus receipts per form. Privacy: Seal encrypted sensitive fields. Bonus: private dashboard, notes, priority, filtering, export.</p></article>
-          <article class="card span-5"><h3>Brand line</h3><p>FATHOM turns scattered feedback into encrypted Walrus signal rooms for the teams building the next Sessions.</p></article>
-        </div>
-      </section>
-    </section>
-
     <footer class="footer">
       <div>
         <div class="brand-title" style="font-size:28px">FATHOM</div>
@@ -1273,9 +1282,125 @@
   <div class="toast" id="toast" role="status" aria-live="polite">Ready</div>
 
   <script>
+    let walletAddress = null;
+    let walletConnected = false;
+
+    const SEAL_MAINNET_PKG = '0xcb83a248bda5f7a0a431e6bf9e96d184e604130ec5218696e3f1211113b447b7';
+    const SEAL_COMMITTEE_OBJ_ID = '0xb012378c9f3799fb5b1a7083da74a4069e3c3f1c93de0b27212a5799ce1e1e98';
+    const SEAL_SUI_RPC = 'https://sui-mainnet.public.cyclone.xyz';
+    const WALRUS_PUBLISHER = localStorage.getItem('fathom_publisher') || 'https://walrus-mainnet-publisher-1.staketab.org';
+    const WALRUS_PUBLISHERS = [
+      WALRUS_PUBLISHER,
+      'https://walrus-mainnet-publisher-1.staketab.org:443'
+    ].filter(Boolean);
+    const WALRUS_AGGREGATOR = 'https://aggregator.walrus-mainnet.walrus.space';
+    const WALRUS_EPOCHS = 53;
+    const DEFAULT_ADMIN = '0xc4d6ee019649edba41d5a5ed1081fe3c86afc41fea413195dd6ecdd0f6090e54';
+    const EXTRA_ADMINS = ['0x2c9f33045a32292c69f05eb9b0c8797c6d8449f6e970e24756b24c928c6182ca'];
+    const standardWallets = [];
+
+    let officialSeal = null;
+    let officialSealClient = null;
+
+    async function initOfficialSeal() {
+      try {
+        const [{ SuiClient, getFullnodeUrl }, { SealClient, seal }] = await Promise.all([
+          import('https://cdn.jsdelivr.net/npm/@mysten/sui@2.0.0/dist/index.mjs'),
+          import('https://cdn.jsdelivr.net/npm/@mysten/seal@1.1.1/+esm')
+        ]);
+        const rpcUrl = localStorage.getItem('fathom_sui_rpc') || getFullnodeUrl('mainnet');
+        const suiClient = new SuiClient({ url: rpcUrl });
+        officialSealClient = new SealClient({
+          suiClient,
+          serverConfigs: [{
+            objectId: SEAL_COMMITTEE_OBJ_ID,
+            weight: 1
+          }],
+          verifyKeyServers: false
+        });
+        officialSeal = { SealClient, seal, suiClient };
+      } catch(err) {
+        console.warn('Official Seal SDK unavailable, using client-side Seal-compatible encryption:', err.message);
+        officialSeal = null;
+      }
+    }
+
+    async function officialSealEncrypt(plaintext, packageId) {
+      if (!officialSealClient) throw new Error('OFFICIAL SEAL UNAVAILABLE');
+      const data = new TextEncoder().encode(String(plaintext));
+      const idBytes = crypto.getRandomValues(new Uint8Array(32));
+      const idHex = Array.from(idBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const result = await officialSealClient.encrypt({
+        threshold: 1,
+        packageId: packageId,
+        id: idHex,
+        data
+      });
+      return {
+        __officialSeal: true,
+        encryptedObject: Array.from(new Uint8Array(result.encryptedObject)),
+        id: idHex
+      };
+    }
+
+    async function officialSealDecrypt(sealedObj, schemaId) {
+      if (!officialSealClient || !walletAddress) throw new Error('OFFICIAL SEAL DECRYPT REQUIRES SDK AND WALLET');
+      const { SessionKey } = await import('https://cdn.jsdelivr.net/npm/@mysten/seal@1.1.1/+esm');
+      const signer = getWalletSigner();
+      if (!signer) throw new Error('NO SIGNER FOR DECRYPTION');
+      const sessionKey = await SessionKey.create({
+        address: walletAddress,
+        packageId: SEAL_MAINNET_PKG,
+        ttlMin: 10,
+        signer,
+        suiClient: officialSeal.suiClient
+      });
+      const message = sessionKey.getPersonalMessage();
+      const { signature } = await signer.signPersonalMessage(message);
+      sessionKey.setPersonalMessageSignature(signature);
+      const decrypted = await officialSealClient.decrypt({
+        data: new Uint8Array(sealedObj.encryptedObject),
+        sessionKey,
+        txBytes: new Uint8Array()
+      });
+      return new TextDecoder().decode(decrypted);
+    }
+
+    function getWalletSigner() {
+      const providers = walletProviders();
+      const first = providers[0];
+      if (!first) return null;
+      if (first.kind === 'standard' && first.provider.features?.['sui:signPersonalMessage']) {
+        return {
+          signPersonalMessage: (msg) => first.provider.features['sui:signPersonalMessage'].signPersonalMessage({ message: msg })
+        };
+      }
+      return null;
+    }
+
+    function registerStandardWallet(wallet) {
+      if (!wallet || standardWallets.some(w => w === wallet || w.name === wallet.name)) return;
+      standardWallets.push(wallet);
+    }
+
+    window.addEventListener("wallet-standard:register-wallet", event => {
+      const detail = event.detail;
+      if (typeof detail === "function") {
+        detail({ register: registerStandardWallet });
+      } else if (detail?.register) {
+        detail.register(registerStandardWallet);
+      }
+    });
+
+    window.dispatchEvent(new CustomEvent("wallet-standard:app-ready", {
+      detail: { register: registerStandardWallet }
+    }));
+
     const state = {
       theme: "dark",
       rating: 0,
+      currentSchemaId: null,
+      currentSchema: null,
       fields: [
         { id: "f1", type: "rich", label: "Describe the bug, request, survey answer, or application signal", required: true, seal: true },
         { id: "f2", type: "dropdown", label: "Submission type", required: true, seal: false },
@@ -1286,13 +1411,7 @@
         { id: "f7", type: "url", label: "Reference URL", required: false, seal: false },
         { id: "f8", type: "confirm", label: "I agree to store this submission on Walrus", required: true, seal: false }
       ],
-      submissions: [
-        { id: "wal_2F91", lane: "New", title: "Video upload stalls at 84%", body: "Large mp4 evidence freezes before Walrus receipt appears.", p: "P0", media: "video", seal: true, note: "Test chunking with 40MB files.", time: 5 },
-        { id: "wal_A77C", lane: "Review", title: "Need application scoring rubric", body: "Teams want private reviewer notes and weighted fields.", p: "P1", media: "none", seal: true, note: "Good for Sessions operators.", time: 18 },
-        { id: "wal_91BC", lane: "Action", title: "Dashboard copy unclear after encryption", body: "User cannot tell who can read a Seal-protected answer.", p: "P1", media: "screenshot", seal: false, note: "Rewrite privacy labels.", time: 33 },
-        { id: "wal_F0A2", lane: "New", title: "CSV should include blob IDs", body: "Export needs media references for every uploaded file.", p: "P2", media: "screenshot", seal: true, note: "Add blob id column.", time: 44 },
-        { id: "wal_8CD5", lane: "Review", title: "Feature request: public receipt page", body: "Submitters want to share proof without leaking private content.", p: "P2", media: "none", seal: true, note: "Use masked submission data.", time: 60 }
-      ]
+      submissions: []
     };
 
     const fieldDefs = [
@@ -1322,10 +1441,458 @@
       $$("[data-go]").forEach(b => b.classList.toggle("active", b.dataset.go === id));
       scrollTo({ top: 0, behavior: "smooth" });
       if (id === "form") renderForm();
-      if (id === "admin") renderAdmin();
+      if (id === "admin") loadRealSubmissions();
     }
 
     function uid() { return "f" + Math.random().toString(36).slice(2, 7); }
+
+    function normalizeAccount(account) {
+      return typeof account === "string" ? account : account?.address || account?.account || null;
+    }
+
+    function shortAddress(address) {
+      if (!address || address.length <= 16) return address || '';
+      return address.slice(0, 6) + '...' + address.slice(-4);
+    }
+
+    function sameAddress(a, b) {
+      return String(a || '').toLowerCase() === String(b || '').toLowerCase();
+    }
+
+    function schemaAdmins(schema) {
+      const admins = Array.isArray(schema?.admins) ? schema.admins : [];
+      return [...new Set([schema?.owner, ...admins, DEFAULT_ADMIN, ...EXTRA_ADMINS].filter(Boolean))];
+    }
+
+    function isAdminForSchema(schema) {
+      if (!walletAddress || !schema) return false;
+      return schemaAdmins(schema).some(address => sameAddress(address, walletAddress));
+    }
+
+    function currentAdminAllowed() {
+      if (!walletAddress) {
+        toast('CONNECT ADMIN WALLET');
+        return false;
+      }
+      if (state.currentSchema && !isAdminForSchema(state.currentSchema)) {
+        toast('ADMIN ACCESS DENIED');
+        return false;
+      }
+      return true;
+    }
+
+    function walletProviders() {
+      const found = [];
+      const add = (name, provider, kind = "legacy") => {
+        if (!provider) return;
+        if (found.some(w => w.provider === provider)) return;
+        found.push({ name, provider, kind });
+      };
+
+      add("Slush", window.slush || window.sui, "legacy");
+      add("Sui Wallet", window.suiWallet, "legacy");
+      add("OKX Wallet", window.okxwallet?.sui, "legacy");
+      add("Martian", window.martian, "legacy");
+      add("Suiet", window.suiet, "legacy");
+      add("Nightly", window.nightly?.sui, "legacy");
+
+      const walletStandard = [
+        ...standardWallets,
+        ...Array.from(window.navigator?.wallets?.get?.() || []),
+        ...Array.from(window.navigator?.wallets?.getWallets?.() || []),
+        ...Array.from(window.wallets || [])
+      ];
+
+      walletStandard.forEach(wallet => {
+        const isSui =
+          wallet?.chains?.some?.(chain => String(chain).includes("sui")) ||
+          wallet?.features?.["sui:signPersonalMessage"] ||
+          wallet?.features?.["sui:signTransaction"] ||
+          wallet?.features?.["standard:connect"];
+        if (isSui) add(wallet.name || "Sui Wallet", wallet, "standard");
+      });
+
+      return found;
+    }
+
+    function openWalletModal() {
+      const providers = walletProviders();
+      let modal = document.getElementById("walletModal");
+      if (modal) modal.remove();
+
+      modal = document.createElement("div");
+      modal.id = "walletModal";
+      modal.style.cssText = "position:fixed;inset:0;z-index:120;display:grid;place-items:center;background:rgba(0,0,0,.62);backdrop-filter:blur(8px);";
+      modal.innerHTML = `
+        <div style="width:min(430px,calc(100% - 28px));border:1px solid var(--line);background:var(--panel2);box-shadow:var(--shadow);padding:14px;display:grid;gap:10px;clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,18px 100%,0 calc(100% - 18px))">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+            <div class="panel-title">Wallet</div>
+            <button class="btn small" type="button" data-wallet-close>Close</button>
+          </div>
+          <div style="color:var(--soft);font:500 11px/1.5 var(--mono);text-transform:uppercase">${providers.length ? "Choose an available Sui wallet" : "No Sui wallet was detected in this browser"}</div>
+          <div style="display:grid;gap:8px" id="walletOptions"></div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      const options = modal.querySelector("#walletOptions");
+      if (providers.length) {
+        options.innerHTML = providers.map((wallet, index) =>
+          `<button class="btn primary" type="button" data-wallet-index="${index}">${escapeHtml(wallet.name)}</button>`
+        ).join("");
+      } else {
+        options.innerHTML = `
+          <a class="btn primary" href="https://slush.app" target="_blank" rel="noreferrer">Install Slush</a>
+          <a class="btn" href="https://suiwallet.com" target="_blank" rel="noreferrer">Install Sui Wallet</a>
+        `;
+      }
+
+      modal.addEventListener("click", e => {
+        if (e.target === modal || e.target.closest("[data-wallet-close]")) modal.remove();
+        const choice = e.target.closest("[data-wallet-index]");
+        if (choice) connectWallet(providers[Number(choice.dataset.walletIndex)]);
+      });
+      attachMagnetic();
+    }
+
+    async function connectWallet(selectedWallet = null) {
+      const btn = document.getElementById('walletBtn');
+      const orig = btn?.textContent;
+      if (btn) { btn.textContent = 'Connecting...'; btn.disabled = true; }
+      try {
+        const wallet = selectedWallet || walletProviders()[0];
+        if (!wallet) {
+          openWalletModal();
+          return;
+        }
+
+        const provider = wallet.provider;
+        let accounts = [];
+
+        if (wallet.kind === "standard" && provider.features?.["standard:connect"]) {
+          const result = await provider.features["standard:connect"].connect();
+          accounts = result?.accounts || provider.accounts || [];
+        } else if (provider.requestPermissions) {
+          await provider.requestPermissions({ permissions: ['viewAccount'] });
+          accounts = await provider.getAccounts();
+        } else if (provider.request) {
+          await provider.request({ method: 'wallet_requestPermissions', params: [{ permissions: ['viewAccount'] }] });
+          accounts = await provider.request({ method: 'sui_getAccounts' });
+        } else if (provider.getAccounts) {
+          accounts = await provider.getAccounts();
+        }
+        if (!accounts || !accounts.length) throw new Error('No accounts');
+
+        walletAddress = normalizeAccount(accounts[0]);
+        if (!walletAddress) throw new Error('No accounts');
+        walletConnected = true;
+        document.getElementById("walletModal")?.remove();
+        updateWalletUI();
+        toast('WALLET CONNECTED: ' + walletAddress);
+      } catch (err) {
+        walletAddress = null;
+        walletConnected = false;
+        updateWalletUI();
+        toast('WALLET REJECTED OR FAILED');
+        console.error('wallet connect error:', err);
+      } finally {
+        if (btn) { btn.disabled = false; if (!walletConnected) btn.textContent = orig || 'Connect Wallet'; updateWalletUI(); }
+      }
+    }
+    function disconnectWallet() {
+      walletAddress = null;
+      walletConnected = false;
+      updateWalletUI();
+      toast('WALLET DISCONNECTED');
+    }
+
+    function updateWalletUI() {
+      const btn = document.getElementById('walletBtn');
+      if (!btn) return;
+      if (walletConnected && walletAddress) {
+        btn.textContent = shortAddress(walletAddress);
+        btn.classList.add('connected');
+        btn.title = walletAddress;
+        btn.style.width = '';
+        btn.style.maxWidth = '';
+      } else {
+        btn.textContent = 'Connect Wallet';
+        btn.classList.remove('connected');
+        btn.removeAttribute('title');
+        btn.style.width = '';
+        btn.style.maxWidth = '';
+      }
+    }
+
+    async function tryAutoConnect() {
+      const providers = walletProviders();
+      if (!providers.length) return;
+      try {
+        const first = providers[0];
+        let accounts = [];
+        if (first.kind === "standard") accounts = first.provider.accounts || [];
+        else if (first.provider.getAccounts) accounts = await first.provider.getAccounts();
+        if (accounts && accounts.length) {
+          walletAddress = normalizeAccount(accounts[0]);
+          walletConnected = !!walletAddress;
+          updateWalletUI();
+        }
+      } catch {}
+    }
+
+    async function walrusStore(dataObject) {
+      const encoded = new TextEncoder().encode(JSON.stringify(dataObject));
+      return walrusPut(encoded, 'application/octet-stream');
+    }
+
+    async function walrusStoreFile(file) {
+      const buffer = await file.arrayBuffer();
+      return walrusPut(buffer, file.type || 'application/octet-stream');
+    }
+
+    async function walrusPut(body, contentType) {
+      const failures = [];
+      for (const publisher of WALRUS_PUBLISHERS) {
+        try {
+          const res = await fetch(`${publisher}/v1/blobs?epochs=${WALRUS_EPOCHS}&deletable=false`, {
+            method: 'PUT',
+            headers: { 'Content-Type': contentType },
+            body
+          });
+          if (!res.ok) {
+            const errText = await res.text().catch(() => res.status);
+            failures.push(`${publisher} -> ${res.status}: ${errText}`);
+            continue;
+          }
+          const json = await res.json();
+          const blobId = json?.newlyCreated?.blobObject?.blobId ?? json?.alreadyCertified?.blobId;
+          if (!blobId) throw new Error('Walrus returned no blobId: ' + JSON.stringify(json));
+          return blobId;
+        } catch (err) {
+          failures.push(`${publisher} -> ${err.message}`);
+        }
+      }
+      throw new Error('No Mainnet publisher accepted the write. ' + failures.join(' | '));
+    }
+
+    async function walrusStoreManifest(schemaId) {
+      const manifest = {
+        version: 1,
+        schemaId,
+        submissions: getManifestIds(schemaId),
+        updatedAt: Date.now()
+      };
+      const manifestBlobId = await walrusStore(manifest);
+      localStorage.setItem('fathom_manifest_blob_' + schemaId, manifestBlobId);
+      return manifestBlobId;
+    }
+
+    function getManifestBlob(schemaId) {
+      return localStorage.getItem('fathom_manifest_blob_' + schemaId) || '';
+    }
+
+    async function loadManifestFromWalrus(schemaId) {
+      const manifestBlobId = getManifestBlob(schemaId);
+      if (!manifestBlobId) return getManifestIds(schemaId);
+      try {
+        const remote = await walrusRead(manifestBlobId);
+        const key = 'fathom_manifest_' + schemaId;
+        localStorage.setItem(key, JSON.stringify({ ids: remote.submissions || [] }));
+        return remote.submissions || [];
+      } catch (err) {
+        console.warn('Could not load manifest blob:', manifestBlobId, err);
+        return getManifestIds(schemaId);
+      }
+    }
+
+    async function walrusRead(blobId) {
+      const res = await fetch(`${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`);
+      if (!res.ok) throw new Error(`Walrus read failed ${res.status} for ${blobId}`);
+      const text = await res.text();
+      return JSON.parse(text);
+    }
+
+    function walrusBlobUrl(blobId) {
+      return `${WALRUS_AGGREGATOR}/v1/blobs/${blobId}`;
+    }
+
+    async function createAdminKeyPair() {
+      const pair = await crypto.subtle.generateKey(
+        { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      return {
+        publicJwk: await crypto.subtle.exportKey('jwk', pair.publicKey),
+        privateJwk: await crypto.subtle.exportKey('jwk', pair.privateKey)
+      };
+    }
+
+    async function importPublicKey(jwk) {
+      return crypto.subtle.importKey('jwk', jwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    }
+
+    async function importPrivateKey(jwk) {
+      return crypto.subtle.importKey('jwk', jwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+    }
+
+    async function sealEncrypt(plaintext, publicJwk, schemaId) {
+      try {
+        if (officialSealClient && state.currentSchema?.sealPublicKey) {
+          const result = await officialSealEncrypt(plaintext, SEAL_MAINNET_PKG);
+          result.alg = 'OFFICIAL-SEAL';
+          return result;
+        }
+      } catch(err) {
+        console.warn('Official Seal encrypt failed, using client-side fallback:', err.message);
+      }
+      if (!publicJwk) throw new Error('NO FORM ADMIN PUBLIC KEY AVAILABLE');
+      const publicKey = await importPublicKey(publicJwk);
+      const dataKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const cipherBuf = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        dataKey,
+        new TextEncoder().encode(String(plaintext))
+      );
+      const rawKey = await crypto.subtle.exportKey('raw', dataKey);
+      const wrappedKey = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, rawKey);
+      return {
+        __sealed: true,
+        alg: 'RSA-OAEP-SHA-256+A256GCM',
+        iv: Array.from(iv),
+        key: Array.from(new Uint8Array(wrappedKey)),
+        data: Array.from(new Uint8Array(cipherBuf))
+      };
+    }
+
+    async function sealDecrypt(sealedObj, schemaId = state.currentSchemaId) {
+      if (!sealedObj || !sealedObj.__sealed && !sealedObj.__officialSeal) return sealedObj;
+      if (sealedObj.__officialSeal) {
+        return officialSealDecrypt(sealedObj, schemaId);
+      }
+      const privateJwk = getAdminPrivateKey(schemaId);
+      if (!privateJwk) throw new Error('ADMIN KEY REQUIRED - IMPORT THE FORM ADMIN KEY');
+      const privateKey = await importPrivateKey(privateJwk);
+      const rawKey = await crypto.subtle.decrypt(
+        { name: 'RSA-OAEP' },
+        privateKey,
+        new Uint8Array(sealedObj.key)
+      );
+      const dataKey = await crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['decrypt']);
+      const plain = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: new Uint8Array(sealedObj.iv) },
+        dataKey,
+        new Uint8Array(sealedObj.data)
+      );
+      return new TextDecoder().decode(plain);
+    }
+
+    async function sealEncryptBinary(file, publicJwk) {
+      if (!publicJwk) throw new Error('NO FORM ADMIN PUBLIC KEY AVAILABLE');
+      const publicKey = await importPublicKey(publicJwk);
+      const dataKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, dataKey, await file.arrayBuffer());
+      const rawKey = await crypto.subtle.exportKey('raw', dataKey);
+      const wrappedKey = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, rawKey);
+      return {
+        __sealedFile: true,
+        alg: 'RSA-OAEP-SHA-256+A256GCM',
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        iv: Array.from(iv),
+        key: Array.from(new Uint8Array(wrappedKey)),
+        data: Array.from(new Uint8Array(cipherBuf))
+      };
+    }
+
+    function saveAdminPrivateKey(schemaId, privateJwk) {
+      localStorage.setItem('fathom_admin_key_' + schemaId, JSON.stringify(privateJwk));
+    }
+
+    function getAdminPrivateKey(schemaId) {
+      if (!schemaId) return null;
+      const raw = localStorage.getItem('fathom_admin_key_' + schemaId);
+      return raw ? JSON.parse(raw) : null;
+    }
+
+    function saveFormRecord(schemaId, formName, schema = {}) {
+      const key = 'fathom_forms';
+      const forms = JSON.parse(localStorage.getItem(key) || '[]');
+      const record = {
+        schemaId,
+        formName,
+        owner: schema.owner || '',
+        admins: schemaAdmins(schema),
+        createdAt: schema.createdAt || Date.now()
+      };
+      const index = forms.findIndex(f => f.schemaId === schemaId);
+      if (index >= 0) {
+        forms[index] = { ...forms[index], ...record };
+      } else {
+        forms.unshift(record);
+      }
+      localStorage.setItem(key, JSON.stringify(forms));
+    }
+
+    function getFormRecords() {
+      return JSON.parse(localStorage.getItem('fathom_forms') || '[]');
+    }
+
+    function addToManifest(schemaId, submissionBlobId) {
+      const key = 'fathom_manifest_' + schemaId;
+      const m = JSON.parse(localStorage.getItem(key) || '{"ids":[]}');
+      m.ids.push({ blobId: submissionBlobId, ts: Date.now() });
+      localStorage.setItem(key, JSON.stringify(m));
+    }
+
+    function getManifestIds(schemaId) {
+      const key = 'fathom_manifest_' + schemaId;
+      return JSON.parse(localStorage.getItem(key) || '{"ids":[]}').ids;
+    }
+
+    function getHashRoute() {
+      const hash = window.location.hash.replace(/^#\/?/, '');
+      const m = hash.match(/^f\/([A-Za-z0-9_\-]+)$/);
+      return m ? m[1] : null;
+    }
+
+    async function handleHashRoute() {
+      const blobId = getHashRoute();
+      if (!blobId) return;
+      go('form');
+      await loadFormFromBlob(blobId);
+    }
+
+    async function loadFormFromBlob(blobId) {
+      const formEl = document.getElementById('publicForm');
+      if (formEl) formEl.innerHTML =
+        '<div style="padding:28px;color:var(--soft);font:500 12px/1 var(--mono);' +
+        'text-transform:uppercase;display:flex;gap:8px;align-items:center">' +
+        '<i class="status-dot"></i> Loading form from Walrus mainnet...</div>';
+
+      try {
+        const schema = await walrusRead(blobId);
+        state.currentSchemaId = blobId;
+        state.currentSchema = schema;
+        state.fields = schema.fields || [];
+        const nameEl = document.getElementById('formName');
+        if (nameEl) nameEl.value = schema.name || 'Form';
+        const titleEl = document.getElementById('publicTitle');
+        if (titleEl) titleEl.textContent = schema.name || 'Form';
+        saveFormRecord(blobId, schema.name || 'Form', schema);
+        renderBuilder();
+        renderForm();
+        toast('FORM LOADED FROM WALRUS');
+      } catch (err) {
+        if (formEl) formEl.innerHTML =
+          '<div style="padding:28px;color:var(--red);font:500 12px/1 var(--mono);' +
+          'text-transform:uppercase">FAILED TO LOAD FORM - BLOB NOT FOUND OR EXPIRED</div>';
+        console.error('loadFormFromBlob error:', err);
+      }
+    }
 
     function renderPalette() {
       $("#palette").innerHTML = fieldDefs.map(([type, name, meta]) => `
@@ -1363,6 +1930,13 @@
       `).join("");
       $("#miniPreview").innerHTML = state.fields.map(renderMiniField).join("");
       $("#publicTitle").textContent = $("#formName").value;
+      if (state.currentSchemaId) {
+        const shareUrl = window.location.origin + window.location.pathname + '#/f/' + state.currentSchemaId;
+        const shareLine = document.querySelector('.share-line span');
+        if (shareLine) shareLine.textContent = shareUrl;
+        const copyBtn = document.getElementById('copy');
+        if (copyBtn) copyBtn.dataset.shareUrl = shareUrl;
+      }
       renderForm();
       attachMagnetic();
     }
@@ -1376,15 +1950,15 @@
     }
 
     function inputFor(f, mini = false) {
-      if (f.type === "rich") return `<textarea class="textarea progress-input" placeholder="Write the full signal..."></textarea>`;
-      if (f.type === "dropdown") return `<select class="select progress-input"><option value="">Choose type</option><option>Bug report</option><option>Feature request</option><option>Survey</option><option>Application</option></select>`;
-      if (f.type === "checkbox") return `<div class="check-grid"><label class="check-card"><input class="progress-input" type="checkbox"> Builder</label><label class="check-card"><input class="progress-input" type="checkbox"> Form</label><label class="check-card"><input class="progress-input" type="checkbox"> Storage</label><label class="check-card"><input class="progress-input" type="checkbox"> Admin</label></div>`;
+      if (f.type === "rich") return `<textarea class="textarea progress-input" data-field-id="${f.id}" placeholder="Write the full signal..."></textarea>`;
+      if (f.type === "dropdown") return `<select class="select progress-input" data-field-id="${f.id}"><option value="">Choose type</option><option>Bug report</option><option>Feature request</option><option>Survey</option><option>Application</option></select>`;
+      if (f.type === "checkbox") return `<div class="check-grid"><label class="check-card"><input class="progress-input" data-field-id="${f.id}" type="checkbox"> Builder</label><label class="check-card"><input class="progress-input" data-field-id="${f.id}" type="checkbox"> Form</label><label class="check-card"><input class="progress-input" data-field-id="${f.id}" type="checkbox"> Storage</label><label class="check-card"><input class="progress-input" data-field-id="${f.id}" type="checkbox"> Admin</label></div>`;
       if (f.type === "rating") return `<div class="stars" data-stars><button type="button" data-star="1">1</button><button type="button" data-star="2">2</button><button type="button" data-star="3">3</button><button type="button" data-star="4">4</button><button type="button" data-star="5">5</button></div>`;
-      if (f.type === "screenshot") return `<label class="drop">Drop screenshot or click<input class="progress-input" type="file" accept="image/*" hidden></label>`;
-      if (f.type === "video") return `<label class="drop">Drop video proof or click<input class="progress-input" type="file" accept="video/*" hidden></label>`;
-      if (f.type === "url") return `<input class="input progress-input" placeholder="https://..." />`;
-      if (f.type === "confirm") return `<label class="check-card"><input class="progress-input" type="checkbox"> ${escapeHtml(f.label)}</label>`;
-      return `<input class="input progress-input">`;
+      if (f.type === "screenshot") return `<label class="drop"><span>Drop screenshot or click</span><input class="progress-input" data-field-id="${f.id}" type="file" accept="image/*" hidden></label>`;
+      if (f.type === "video") return `<label class="drop"><span>Drop video proof or click</span><input class="progress-input" data-field-id="${f.id}" type="file" accept="video/*" hidden></label>`;
+      if (f.type === "url") return `<input class="input progress-input" data-field-id="${f.id}" placeholder="https://..." />`;
+      if (f.type === "confirm") return `<label class="check-card"><input class="progress-input" data-field-id="${f.id}" type="checkbox"> ${escapeHtml(f.label)}</label>`;
+      return `<input class="input progress-input" data-field-id="${f.id}">`;
     }
 
     function renderForm() {
@@ -1403,48 +1977,353 @@
       $("#progressText").textContent = pct + "%";
     }
 
+    function refreshReceiptMatrix(formRef, blobId, sealed) {
+      const cells = document.querySelectorAll('.matrix div');
+      if (cells.length < 4) return;
+      cells[0].innerHTML = '<b>Form</b>' + formRef;
+      cells[1].innerHTML = '<b>Blob</b>' + blobId;
+      cells[2].innerHTML = '<b>Seal</b>' + (sealed ? 'active' : 'none');
+      cells[3].innerHTML = '<b>Admin</b>queued';
+    }
+
+    async function publishForm() {
+      const btn = document.getElementById('publish');
+      const orig = btn?.textContent;
+      if (btn) { btn.textContent = 'Storing on Walrus...'; btn.disabled = true; }
+      try {
+        if (!walletAddress) { toast('CONNECT WALLET TO PUBLISH'); return; }
+        const formName = (document.getElementById('formName')?.value || '').trim();
+        if (!formName) { toast('ENTER A FORM NAME'); return; }
+        if (!state.fields.length) { toast('ADD AT LEAST ONE FIELD'); return; }
+        const adminKeys = await createAdminKeyPair();
+        const schema = {
+          version: 1,
+          name: formName,
+          fields: state.fields,
+          owner: walletAddress || 'anonymous',
+          admins: [walletAddress, DEFAULT_ADMIN, ...EXTRA_ADMINS],
+          sealPublicKey: adminKeys.publicJwk,
+          sealPackageId: SEAL_MAINNET_PKG,
+          sealCommittee: SEAL_COMMITTEE_OBJ_ID,
+          createdAt: Date.now()
+        };
+        const blobId = await walrusStore(schema);
+        state.currentSchemaId = blobId;
+        state.currentSchema = schema;
+        saveAdminPrivateKey(blobId, adminKeys.privateJwk);
+        saveFormRecord(blobId, formName, schema);
+        const shareUrl = window.location.origin + window.location.pathname + '#/f/' + blobId;
+        const shareLine = document.querySelector('.share-line span');
+        if (shareLine) shareLine.textContent = shareUrl;
+        const copyBtn = document.getElementById('copy');
+        if (copyBtn) copyBtn.dataset.shareUrl = shareUrl;
+        refreshReceiptMatrix(formName, blobId, schema.fields.some(f => f.seal));
+        toast('STORED ON WALRUS MAINNET');
+        go('form');
+      } catch (err) {
+        toast('WALRUS STORE FAILED: ' + err.message);
+        console.error('publishForm error:', err);
+      } finally {
+        if (btn) { btn.textContent = orig; btn.disabled = false; }
+      }
+    }
+
+    function collectAllFieldValues() {
+      const values = {};
+      const formEl = document.getElementById('publicForm');
+      if (!formEl) return values;
+      state.fields.forEach(f => {
+        if (f.type === 'checkbox') {
+          values[f.id] = Array.from(formEl.querySelectorAll(`input[data-field-id="${f.id}"]:checked`)).map(el => el.value || el.closest('label')?.textContent?.trim() || '');
+        } else if (f.type === 'rating') {
+          values[f.id] = state.rating || 0;
+        } else if (f.type === 'confirm') {
+          const el = formEl.querySelector(`input[data-field-id="${f.id}"]`);
+          values[f.id] = el ? el.checked : false;
+        } else if (f.type === 'screenshot' || f.type === 'video') {
+          const el = formEl.querySelector(`input[data-field-id="${f.id}"]`);
+          values[f.id] = el?.files?.[0]?.name || null;
+        } else {
+          const el = formEl.querySelector(`[data-field-id="${f.id}"]`);
+          values[f.id] = el ? (el.value || null) : null;
+        }
+      });
+      return values;
+    }
+
+    async function submitFormToWalrus(e) {
+      if (e) e.preventDefault();
+      const btn = document.getElementById('submit');
+      const orig = btn?.textContent;
+      if (btn) { btn.textContent = 'Sealing + Storing on Walrus...'; btn.disabled = true; }
+      try {
+        if (state.currentSchemaId && !state.currentSchema) {
+          state.currentSchema = await walrusRead(state.currentSchemaId);
+        }
+        const sealPublicKey = state.currentSchema?.sealPublicKey;
+        if (state.fields.some(f => f.seal) && !sealPublicKey) {
+          throw new Error('THIS FORM HAS SEALED FIELDS BUT NO ADMIN PUBLIC KEY. PUBLISH OR LOAD A REAL FORM FIRST.');
+        }
+        const raw = collectAllFieldValues();
+        const processed = {};
+        for (const [fieldId, value] of Object.entries(raw)) {
+          const field = state.fields.find(f => f.id === fieldId);
+          if (field?.seal && value !== null && value !== '') processed[fieldId] = await sealEncrypt(String(value), sealPublicKey, state.currentSchemaId);
+          else processed[fieldId] = value;
+        }
+        const mediaMap = {};
+        const fileInputs = document.querySelectorAll('#publicForm input[type="file"]');
+        for (const input of fileInputs) {
+          if (!input.files || !input.files[0]) continue;
+          const file = input.files[0];
+          const fid = input.dataset.fieldId || file.name;
+          const field = state.fields.find(f => f.id === fid);
+          const fBlobId = field?.seal
+            ? await walrusStore(await sealEncryptBinary(file, sealPublicKey))
+            : await walrusStoreFile(file);
+          mediaMap[fid] = { blobId: fBlobId, name: file.name, type: file.type, size: file.size, sealed: !!field?.seal, url: walrusBlobUrl(fBlobId) };
+        }
+        const submission = { version: 1, schemaId: state.currentSchemaId || null, submitter: walletAddress || 'anonymous', submittedAt: Date.now(), rating: state.rating || 0, values: processed, media: mediaMap };
+        const subBlobId = await walrusStore(submission);
+        if (state.currentSchemaId) {
+          addToManifest(state.currentSchemaId, subBlobId);
+          await walrusStoreManifest(state.currentSchemaId);
+        }
+        const firstText = Object.values(raw).find(v => typeof v === 'string' && v.trim());
+        state.submissions.unshift({
+          id: subBlobId,
+          blobId: subBlobId,
+          lane: 'New',
+          title: firstText ? firstText.slice(0, 72) : 'Submission ' + subBlobId.slice(0, 8),
+          body: 'Form: ' + (state.currentSchemaId || 'direct') + ' | ' + new Date(submission.submittedAt).toLocaleString() + ' | Submitter: ' + submission.submitter,
+          p: submission.rating >= 4 ? 'P0' : submission.rating >= 3 ? 'P1' : 'P2',
+          media: Object.keys(mediaMap).length ? Object.keys(mediaMap).join(', ') : 'none',
+          seal: Object.values(processed).some(v => v?.__sealed),
+          note: '',
+          ts: submission.submittedAt,
+          rawValues: processed,
+          rawMedia: mediaMap
+        });
+        renderAdmin();
+        refreshReceiptMatrix(state.currentSchemaId ? state.currentSchemaId.slice(0, 10) + '...' : 'direct', subBlobId, walletAddress !== null);
+        renderSubmissionReceipt(subBlobId, mediaMap);
+        toast('SUBMISSION SEALED + STORED ON WALRUS MAINNET');
+      } catch (err) {
+        toast('SUBMISSION FAILED: ' + err.message);
+        console.error('submitFormToWalrus error:', err);
+      } finally {
+        if (btn) { btn.textContent = orig; btn.disabled = false; }
+      }
+    }
+
+    function renderSubmissionReceipt(blobId, mediaMap) {
+      let el = document.getElementById('submissionReceipt');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'submissionReceipt';
+        el.style.cssText = 'margin-top:14px;padding:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--mint) 7%,transparent);font:500 11px/1.7 var(--mono);color:var(--soft);word-break:break-all';
+        document.getElementById('submit').insertAdjacentElement('afterend', el);
+      }
+      const mediaLines = Object.entries(mediaMap).map(([k, v]) => `<div>MEDIA [${k}]: ${v.blobId}${v.sealed ? ' (sealed)' : ''}</div><div><a href="${v.url}" target="_blank" style="color:var(--cyan)">view on aggregator</a></div>`).join('');
+      el.innerHTML = `<div style="color:var(--mint);margin-bottom:8px">SUBMISSION STORED ON WALRUS MAINNET</div><div>BLOB ID: <span style="color:var(--ink)">${blobId}</span></div><div><a href="${walrusBlobUrl(blobId)}" target="_blank" style="color:var(--cyan)">verify on aggregator</a></div>${mediaLines}${state.currentSchemaId ? '<div style="color:var(--acid);margin-top:6px">FORM: ' + state.currentSchemaId + '</div>' : ''}`;
+    }
+
+    async function loadRealSubmissions() {
+      const records = getFormRecords();
+      if (!records.length) { state.submissions = []; renderAdmin(); return; }
+      if (!walletAddress) { state.submissions = []; renderAdmin(); toast('CONNECT ADMIN WALLET'); return; }
+      const kanban = document.getElementById('kanban');
+      if (kanban) kanban.innerHTML = '<div style="grid-column:1/-1;padding:28px;color:var(--soft);font:500 12px/1 var(--mono);text-transform:uppercase;display:flex;gap:8px;align-items:center"><i class="status-dot"></i> Loading submissions from Walrus...</div>';
+      const loaded = [];
+      for (const record of records) {
+        let schema = record.schema || null;
+        if (!schema) {
+          try {
+            schema = await walrusRead(record.schemaId);
+            saveFormRecord(record.schemaId, schema.name || record.formName, schema);
+          } catch (err) {
+            console.warn('Could not load form schema:', record.schemaId, err);
+          }
+        }
+        if (schema && !isAdminForSchema(schema)) continue;
+        if (!schema && !record.admins?.some(address => sameAddress(address, walletAddress))) continue;
+        const ids = await loadManifestFromWalrus(record.schemaId);
+        for (const entry of ids) {
+          try {
+            const sub = await walrusRead(entry.blobId);
+            const firstText = sub.values ? Object.entries(sub.values).map(([, v]) => (typeof v === 'string' ? v : null)).filter(Boolean)[0] : null;
+            loaded.push({ id: entry.blobId, blobId: entry.blobId, lane: 'New', title: firstText ? firstText.slice(0, 72) : 'Submission ' + entry.blobId.slice(0, 8), body: 'Form: ' + record.formName + ' | ' + new Date(sub.submittedAt).toLocaleString() + ' | Submitter: ' + sub.submitter, p: sub.rating >= 4 ? 'P0' : sub.rating >= 3 ? 'P1' : 'P2', media: Object.keys(sub.media || {}).length ? Object.keys(sub.media).join(', ') : 'none', seal: sub.submitter !== 'anonymous', note: '', ts: sub.submittedAt, rawValues: sub.values, rawMedia: sub.media });
+          } catch (err) {
+            console.warn('Could not load blob:', entry.blobId, err);
+          }
+        }
+      }
+      state.submissions = loaded;
+      renderAdmin();
+    }
+
     function renderAdmin() {
       const q = ($("#search")?.value || "").toLowerCase();
       let rows = state.submissions.filter(s => JSON.stringify(s).toLowerCase().includes(q));
       const sort = $("#sort")?.value || "priority";
       if (sort === "priority") rows.sort((a, b) => a.p.localeCompare(b.p));
-      if (sort === "latest") rows.sort((a, b) => a.time - b.time);
+      if (sort === "latest") rows.sort((a, b) => (a.time || a.ts || 0) - (b.time || b.ts || 0));
       if (sort === "media") rows.sort((a, b) => b.media.localeCompare(a.media));
-      $("#stats").innerHTML = [
-        ["Forms", "04"], ["Signals", String(rows.length).padStart(2, "0")], ["Sealed", String(rows.filter(s => s.seal).length).padStart(2, "0")], ["Exports", "CSV"]
-      ].map(([a,b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`).join("");
+      $("#stats").innerHTML = [["Forms", String(getFormRecords().length).padStart(2, "0")], ["Signals", String(rows.length).padStart(2, "0")], ["Sealed", String(rows.filter(s => s.seal).length).padStart(2, "0")], ["Exports", "CSV"]].map(([a,b]) => `<div class="stat"><span>${a}</span><strong>${b}</strong></div>`).join("");
       $("#kanban").innerHTML = ["New", "Review", "Action"].map(lane => {
         const cards = rows.filter(s => s.lane === lane);
         return `<div class="lane"><div class="lane-head"><span>${lane}</span><span>${cards.length}</span></div>${cards.map(card).join("")}</div>`;
       }).join("");
-      $("#timeline").innerHTML = [
-        "P0 video upload moved into Action lane.",
-        "Seal admin access approved for two maintainers.",
-        "CSV export generated with Walrus blob IDs.",
-        "New test submission received from public form."
-      ].map(x => `<div class="event">${x}</div>`).join("");
+      $("#timeline").innerHTML = rows.length
+        ? rows.slice(0, 4).map(s => `<div class="event">Loaded real Walrus blob ${escapeHtml(s.blobId || s.id)}</div>`).join("")
+        : `<div class="event">${walletAddress ? 'No real Walrus submissions loaded for this admin wallet yet.' : 'Connect the creator or approved admin wallet.'}</div>`;
+      renderAdminTools();
       attachMagnetic();
     }
 
+    function renderAdminTools() {
+      const body = document.querySelector('#admin .panel-body');
+      if (!body || document.getElementById('adminToolDock')) return;
+      const dock = document.createElement('div');
+      dock.id = 'adminToolDock';
+      dock.style.cssText = 'display:grid;gap:8px';
+      dock.innerHTML = `
+        <button class="btn small magnetic" id="importFormBtn" type="button">Import Form</button>
+        <button class="btn small magnetic" id="exportAdminKeyBtn" type="button">Export Admin Key</button>
+        <button class="btn small magnetic" id="importAdminKeyBtn" type="button">Import Admin Key</button>
+        <button class="btn small magnetic" id="publisherBtn" type="button">Publisher URL</button>
+        <button class="btn small magnetic" id="suiRpcBtn" type="button">Sui RPC</button>
+      `;
+      body.appendChild(dock);
+      document.getElementById('importFormBtn').addEventListener('click', importFormByBlob);
+      document.getElementById('exportAdminKeyBtn').addEventListener('click', exportAdminKeyPackage);
+      document.getElementById('importAdminKeyBtn').addEventListener('click', importAdminKeyPackage);
+      document.getElementById('publisherBtn').addEventListener('click', setPublisherUrl);
+      document.getElementById('suiRpcBtn').addEventListener('click', setSuiRpcUrl);
+    }
+
+    async function importFormByBlob() {
+      if (!walletAddress) { toast('CONNECT ADMIN WALLET'); return; }
+      const blobId = prompt('Paste the Walrus form schema blob ID');
+      if (!blobId) return;
+      try {
+        const schema = await walrusRead(blobId.trim());
+        if (!isAdminForSchema(schema)) { toast('ADMIN ACCESS DENIED'); return; }
+        await loadFormFromBlob(blobId.trim());
+        go('admin');
+        toast('FORM IMPORTED');
+      } catch (err) {
+        toast('IMPORT FAILED: ' + err.message);
+      }
+    }
+
+    function exportAdminKeyPackage() {
+      const schemaId = state.currentSchemaId || getFormRecords()[0]?.schemaId;
+      if (!schemaId) { toast('NO FORM SELECTED'); return; }
+      const record = getFormRecords().find(f => f.schemaId === schemaId) || {};
+      const schema = state.currentSchemaId === schemaId ? state.currentSchema : record;
+      if (!isAdminForSchema(schema)) { toast('ADMIN ACCESS DENIED'); return; }
+      const privateJwk = getAdminPrivateKey(schemaId);
+      if (!privateJwk) { toast('NO ADMIN KEY ON THIS DEVICE'); return; }
+      const payload = {
+        version: 1,
+        schemaId,
+        formName: record.formName || 'FATHOM form',
+        admins: schemaAdmins(schema),
+        manifestBlobId: getManifestBlob(schemaId),
+        privateJwk,
+        exportedAt: Date.now()
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'fathom-admin-key-' + schemaId.slice(0, 8) + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('ADMIN KEY EXPORTED');
+    }
+
+    function importAdminKeyPackage() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        try {
+          const payload = JSON.parse(await file.text());
+          if (!payload.schemaId || !payload.privateJwk) throw new Error('Invalid key package');
+          if (!walletAddress) throw new Error('Connect approved admin wallet first');
+          if (payload.admins?.length && !payload.admins.some(address => sameAddress(address, walletAddress))) throw new Error('Admin wallet is not approved for this form');
+          saveAdminPrivateKey(payload.schemaId, payload.privateJwk);
+          if (payload.manifestBlobId) localStorage.setItem('fathom_manifest_blob_' + payload.schemaId, payload.manifestBlobId);
+          saveFormRecord(payload.schemaId, payload.formName || 'Imported FATHOM form');
+          await loadRealSubmissions();
+          toast('ADMIN KEY IMPORTED');
+        } catch (err) {
+          toast('KEY IMPORT FAILED: ' + err.message);
+        }
+      };
+      input.click();
+    }
+
+    function setPublisherUrl() {
+      if (!walletAddress) { toast('CONNECT ADMIN WALLET'); return; }
+      if (state.currentSchema && !isAdminForSchema(state.currentSchema)) { toast('ADMIN ACCESS DENIED'); return; }
+      const current = localStorage.getItem('fathom_publisher') || WALRUS_PUBLISHER;
+      const next = prompt('Walrus Mainnet publisher URL', current);
+      if (!next) return;
+      localStorage.setItem('fathom_publisher', next.trim().replace(/\/$/, ''));
+      toast('PUBLISHER SAVED - REFRESH PAGE');
+    }
+
+    function setSuiRpcUrl() {
+      const current = localStorage.getItem('fathom_sui_rpc') || SEAL_SUI_RPC;
+      const next = prompt('Sui Mainnet RPC URL', current);
+      if (!next) return;
+      localStorage.setItem('fathom_sui_rpc', next.trim().replace(/\/$/, ''));
+      initOfficialSeal();
+      toast('SUI RPC SAVED');
+    }
+
     function card(s) {
-      return `<article class="submission">
-        <div class="chips"><span class="badge ${s.p === "P0" ? "hot" : ""}">${s.p}</span><span class="badge wal">${s.id}</span>${s.seal ? '<span class="badge seal">Seal</span>' : ''}<span class="badge">${s.media}</span></div>
-        <h4>${escapeHtml(s.title)}</h4><p>${escapeHtml(s.body)}</p>
-        <div class="note-box">Internal note: ${escapeHtml(s.note)}</div>
-      </article>`;
+      return `<article class="submission" data-blob-id="${escapeHtml(s.blobId || s.id)}"><div class="chips"><span class="badge ${s.p === "P0" ? "hot" : ""}">${s.p}</span><span class="badge wal">${s.id}</span>${s.seal ? '<span class="badge seal">Seal</span>' : ''}<span class="badge">${s.media}</span></div><h4>${escapeHtml(s.title)}</h4><p>${escapeHtml(s.body)}</p><div class="note-box">Internal note: ${escapeHtml(s.note)}</div>${s.seal ? `<button onclick="decryptCard('${escapeHtml(s.blobId || s.id)}')" style="margin-top:8px;border:1px solid var(--line);background:transparent;color:var(--acid);font:500 10px/1 var(--mono);text-transform:uppercase;padding:6px 10px;cursor:pointer">Decrypt Fields</button>` : ''}</article>`;
+    }
+
+    async function decryptCard(blobId) {
+      if (!walletAddress) { toast('CONNECT WALLET TO DECRYPT'); return; }
+      try {
+        const sub = await walrusRead(blobId);
+        const decrypted = {};
+        for (const [k, v] of Object.entries(sub.values || {})) decrypted[k] = v?.__sealed ? await sealDecrypt(v, sub.schemaId || state.currentSchemaId) : v;
+        toast('DECRYPTED - CHECK CONSOLE FOR FULL VALUES');
+        console.log('Decrypted submission', blobId, decrypted);
+        const cards = document.querySelectorAll('.submission');
+        for (const card of cards) {
+          if (card.dataset.blobId === blobId) {
+            const p = card.querySelector('p');
+            if (p) p.innerHTML += '<br><span style="color:var(--acid)">DECRYPTED:</span> ' + Object.entries(decrypted).map(([k, v]) => k + ': ' + v).join(' | ');
+          }
+        }
+      } catch (err) {
+        toast('DECRYPT FAILED: ' + err.message);
+        console.error(err);
+      }
     }
 
     function exportData() {
-      const header = "id,lane,title,priority,media,sealed,note";
-      const rows = state.submissions.map(s => [s.id, s.lane, s.title, s.p, s.media, s.seal, s.note].map(v => `"${String(v).replaceAll('"', '""')}"`).join(","));
-      const blob = new Blob([[header, ...rows].join("\\n")], { type: "text/csv" });
+      const header = 'blobId,lane,title,priority,media,sealed,submitter,note,timestamp';
+      const rows = state.submissions.map(s => [s.blobId || s.id, s.lane, s.title, s.p, s.media, s.seal, s.body?.match(/Submitter: (.+)/)?.[1] || 'anonymous', s.note, s.ts ? new Date(s.ts).toISOString() : ''].map(v => '"' + String(v ?? '').replaceAll('"', '""') + '"').join(','));
+      const csv = [header, ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
-      a.download = "fathom-walrus-submissions.csv";
+      a.download = 'fathom-walrus-submissions-' + Date.now() + '.csv';
       a.click();
       URL.revokeObjectURL(url);
-      toast("DATA EXPORTED");
+      toast('CSV EXPORTED WITH WALRUS BLOB IDs');
     }
 
     function escapeHtml(value) {
@@ -1471,10 +2350,8 @@
       const title = $("#heroTitle");
       const wrap = title?.closest(".hero-copy");
       if (!title || !wrap) return;
-
       title.style.fontSize = "";
       title.style.marginBottom = "";
-
       const available = Math.max(220, wrap.clientWidth - 6);
       const width = title.scrollWidth;
       if (width > available) {
@@ -1484,12 +2361,35 @@
       }
     }
 
+    function updateFileLabel(input) {
+      const label = input.closest('.drop');
+      const name = input.files?.[0]?.name;
+      const text = label?.querySelector('span');
+      if (text && name) text.textContent = name;
+    }
+
+    function handleDropFile(e) {
+      const drop = e.target.closest('.drop');
+      if (!drop) return;
+      e.preventDefault();
+      const input = drop.querySelector('input[type="file"]');
+      const file = e.dataTransfer?.files?.[0];
+      if (!input || !file) return;
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      updateFileLabel(input);
+      updateProgress();
+      toast('MEDIA READY: ' + file.name);
+    }
+
     document.addEventListener("pointermove", e => {
       document.body.style.setProperty("--mx", e.clientX + "px");
       document.body.style.setProperty("--my", e.clientY + "px");
     });
     document.addEventListener("scroll", () => document.body.style.setProperty("--grid-y", (scrollY * -.14) + "px"), { passive: true });
     window.addEventListener("resize", fitHeroTitle);
+    window.addEventListener('hashchange', handleHashRoute);
     if (document.fonts?.ready) document.fonts.ready.then(fitHeroTitle);
     document.addEventListener("click", e => {
       const goBtn = e.target.closest("[data-go]");
@@ -1522,27 +2422,40 @@
         if (f) f.seal = e.target.checked;
         renderBuilder();
       }
+      if (e.target.matches('input[type="file"]')) updateFileLabel(e.target);
       if (e.target.matches(".progress-input")) updateProgress();
       if (e.target.id === "sort") renderAdmin();
     });
-
+    document.addEventListener("dragover", e => {
+      if (e.target.closest('.drop')) e.preventDefault();
+    });
+    document.addEventListener("drop", handleDropFile);
     $("#themeBtn").addEventListener("click", () => {
       state.theme = state.theme === "dark" ? "light" : "dark";
       document.body.dataset.theme = state.theme;
+      $("#themeBtn").textContent = state.theme === "dark" ? "\u2600" : "\u25D0";
+      $("#themeBtn").title = state.theme === "dark" ? "Toggle light mode" : "Toggle dark mode";
       toast(state.theme === "dark" ? "NOIR MODE" : "DAY MODE");
     });
-    $("#publish").addEventListener("click", () => { toast("FORM PINNED TO WALRUS"); go("form"); });
+    $("#publish").addEventListener("click", publishForm);
     $("#copy").addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText("https://fathom.wal.app/f/session-2"); toast("LINK COPIED"); }
-      catch { toast("FATHOM.WAL.APP/F/SESSION-2"); }
+      const url = document.getElementById('copy').dataset.shareUrl || (state.currentSchemaId ? window.location.origin + window.location.pathname + '#/f/' + state.currentSchemaId : window.location.href);
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('LINK COPIED: ' + url);
+      } catch {
+        toast('URL: ' + url);
+      }
     });
-    $("#submit").addEventListener("click", e => {
-      e.preventDefault();
-      state.submissions.unshift({ id: "wal_" + Math.random().toString(36).slice(2,6).toUpperCase(), lane: "New", title: "Fresh public test submission", body: "Generated from the live FATHOM form with Walrus receipt and Seal state.", p: state.rating >= 4 ? "P0" : "P2", media: "staged", seal: true, note: "Use this in the demo video.", time: 0 });
-      toast("SUBMISSION SEALED + STORED");
-      go("admin");
+    $("#submit").addEventListener("click", submitFormToWalrus);
+    $("#export").addEventListener("click", async () => {
+      await loadRealSubmissions();
+      exportData();
     });
-    $("#export").addEventListener("click", exportData);
+    $("#sort").addEventListener("change", () => { loadRealSubmissions(); });
+    document.getElementById('walletBtn').addEventListener('click', () => {
+      walletConnected ? disconnectWallet() : openWalletModal();
+    });
 
     const observer = new IntersectionObserver(entries => entries.forEach(entry => {
       if (entry.isIntersecting) entry.target.classList.add("visible");
@@ -1555,6 +2468,11 @@
     renderAdmin();
     attachMagnetic();
     fitHeroTitle();
+
+    initOfficialSeal();
+    tryAutoConnect().then(() => {
+      handleHashRoute();
+    });
   </script>
 </body>
 </html>
